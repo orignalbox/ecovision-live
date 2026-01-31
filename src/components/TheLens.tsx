@@ -25,15 +25,24 @@ export default function TheLens() {
 
     // Toggle Torch
     const toggleTorch = async () => {
-        const track = webcamRef.current?.video?.srcObject
-            ?.getTracks()
-            .find((t) => t.kind === 'video' && (t.getCapabilities() as any).torch);
+        const video = webcamRef.current?.video;
+        if (!video || !video.srcObject) return;
 
-        if (track) {
-            await track.applyConstraints({
-                advanced: [{ torch: !torchOn }]
-            } as any);
-            setTorchOn(!torchOn);
+        const stream = video.srcObject as MediaStream;
+        const track = stream.getTracks().find((t: MediaStreamTrack) => t.kind === 'video');
+
+        // Check capability safely
+        const capabilities = track?.getCapabilities() as any; // 'torch' is non-standard
+
+        if (track && capabilities && capabilities.torch) {
+            try {
+                await track.applyConstraints({
+                    advanced: [{ torch: !torchOn }]
+                } as any);
+                setTorchOn(!torchOn);
+            } catch (err) {
+                console.error("Torch error:", err);
+            }
         } else {
             alert("Flashlight not available on this device.");
         }
