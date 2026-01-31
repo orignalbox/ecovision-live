@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { X, Droplets, Wind, AlertTriangle, Leaf, ChevronRight, Recycle, Package, Lightbulb, Star, Share2 } from 'lucide-react';
+import { X, Droplets, Wind, AlertTriangle, Leaf, ChevronRight, Recycle, Package, Lightbulb, Star, Share2, ShoppingBag } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
 
@@ -48,6 +48,20 @@ export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardP
     };
 
     const ecoScoreColor = ecoScoreColors[data.ecoScore || ''] || 'text-gray-400 bg-gray-500/20 border-gray-500/40';
+
+    // Trigger confetti for 'A' score
+    useState(() => {
+        if (data.ecoScore === 'A') {
+            import('canvas-confetti').then((confetti) => {
+                confetti.default({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 },
+                    colors: ['#22c55e', '#ffffff', '#fbbf24']
+                });
+            });
+        }
+    });
 
     // Share functionality
     const handleShare = async () => {
@@ -275,8 +289,16 @@ ${data.redFlags && data.redFlags.length > 0 ? `⚠️ ${data.redFlags[0]}\n\n` :
                                                 <div className="text-white/40 text-xs mt-2 leading-relaxed">{alt.reason}</div>
                                             )}
                                         </div>
-                                        <ChevronRight size={20} className="text-white/20 group-hover:text-white/50 transition-colors mt-1" />
                                     </div>
+                                    <a
+                                        href={`https://www.google.com/search?q=${encodeURIComponent(alt.name + " eco friendly buy")}&tbm=shop`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="mt-4 flex items-center justify-center gap-2 w-full py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-semibold text-white/70 transition-colors"
+                                    >
+                                        <ShoppingBag size={14} />
+                                        Shop Now
+                                    </a>
                                 </motion.div>
                             ))
                         ) : (
