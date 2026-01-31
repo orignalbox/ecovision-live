@@ -63,14 +63,13 @@ export default function CameraView() {
                 try {
                     const result = await codeReader.decodeFromVideoElement(webcamRef.current.video);
                     if (result) {
-                        console.log("Barcode:", result.getText());
                         handleAnalyze(undefined, result.getText());
                         codeReader.reset(); // Stop scanning once found
                     }
                 } catch (err) {
                     // NotFoundException is expected while scanning
                     if (!(err instanceof NotFoundException)) {
-                        console.error(err);
+                        // Silent error for scanning noise
                     }
                 }
             }
@@ -112,8 +111,8 @@ export default function CameraView() {
             const data = await response.json();
             setReceiptData(data);
         } catch (error) {
-            console.error('Error:', error);
-            alert('Could not analyze. Please try again.');
+            console.error('Analysis error:', error);
+            // Fail silently or show a minimal UI indicator in future
         } finally {
             setIsProcessing(false);
         }
