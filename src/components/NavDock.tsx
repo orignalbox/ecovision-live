@@ -1,9 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Camera, LayoutDashboard, MapPinned, Settings } from 'lucide-react';
+import { Camera, LayoutDashboard, MapPinned } from 'lucide-react';
 import clsx from 'clsx';
-import { useStore } from '@/store/useStore';
 
 interface NavDockProps {
     activeTab: 'lens' | 'dashboard' | 'recycle';
@@ -12,15 +11,18 @@ interface NavDockProps {
 
 export default function NavDock({ activeTab, onTabChange }: NavDockProps) {
     const tabs = [
-        { id: 'dashboard', icon: LayoutDashboard },
-        { id: 'lens', icon: Camera },
-        { id: 'recycle', icon: MapPinned },
+        { id: 'dashboard', icon: LayoutDashboard, label: 'Stats' },
+        { id: 'lens', icon: Camera, label: 'Scan' },
+        { id: 'recycle', icon: MapPinned, label: 'Map' },
     ] as const;
 
     return (
-        // Changed bottom-10 to bottom-6 for better mobile spacing, ensuring it doesn't float too high
-        <div className="fixed bottom-6 left-0 right-0 z-[60] flex justify-center pointer-events-none pb-safe">
-            <div className="bg-glass-white backdrop-blur-3xl border border-white/10 rounded-full p-2 flex items-center gap-4 shadow-2xl pointer-events-auto">
+        <div className="fixed bottom-0 left-0 right-0 z-[60] flex justify-center pb-6 pt-2 pointer-events-none bg-gradient-to-t from-black/80 to-transparent">
+            <nav
+                className="bg-white/10 backdrop-blur-2xl border border-white/10 rounded-full p-2 flex items-center gap-2 shadow-2xl pointer-events-auto"
+                role="navigation"
+                aria-label="Main navigation"
+            >
                 {tabs.map((tab) => {
                     const Icon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -29,28 +31,31 @@ export default function NavDock({ activeTab, onTabChange }: NavDockProps) {
                         <button
                             key={tab.id}
                             onClick={() => onTabChange(tab.id)}
-                            className="relative w-12 h-12 flex items-center justify-center rounded-full transition-all"
+                            className={clsx(
+                                "relative w-14 h-14 flex items-center justify-center rounded-full transition-all",
+                                "focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                            )}
+                            aria-label={tab.label}
+                            aria-current={isActive ? 'page' : undefined}
                         >
                             {isActive && (
                                 <motion.div
                                     layoutId="dock-highlight"
-                                    className="absolute inset-0 bg-white rounded-full opacity-100" // White background for active
-                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    className="absolute inset-0 bg-white rounded-full"
+                                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                 />
                             )}
                             <Icon
                                 size={24}
                                 className={clsx(
                                     "relative z-10 transition-colors duration-200",
-                                    isActive ? "text-void-black" : "text-white/60 hover:text-white"
+                                    isActive ? "text-black" : "text-white/60 hover:text-white"
                                 )}
                             />
-
-                            {/* Active Indicator Dot (optional, maybe cleaner without) */}
                         </button>
                     );
                 })}
-            </div>
+            </nav>
         </div>
     );
 }

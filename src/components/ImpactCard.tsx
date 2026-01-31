@@ -38,90 +38,94 @@ interface ImpactCardProps {
 export default function ImpactCard({ data, onClose }: ImpactCardProps) {
     const [activeTab, setActiveTab] = useState<'impact' | 'recycle' | 'alternatives'>('impact');
 
-    const ecoScoreColor = {
-        'A': 'text-green-400 bg-green-500/20 border-green-500/30',
-        'B': 'text-lime-400 bg-lime-500/20 border-lime-500/30',
-        'C': 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30',
-        'D': 'text-orange-400 bg-orange-500/20 border-orange-500/30',
-        'E': 'text-red-400 bg-red-500/20 border-red-500/30',
-    }[data.ecoScore || 'C'] || 'text-gray-400 bg-gray-500/20 border-gray-500/30';
+    const ecoScoreColors: Record<string, string> = {
+        'A': 'text-green-400 bg-green-500/20 border-green-500/40',
+        'B': 'text-lime-400 bg-lime-500/20 border-lime-500/40',
+        'C': 'text-yellow-400 bg-yellow-500/20 border-yellow-500/40',
+        'D': 'text-orange-400 bg-orange-500/20 border-orange-500/40',
+        'E': 'text-red-400 bg-red-500/20 border-red-500/40',
+    };
+
+    const ecoScoreColor = ecoScoreColors[data.ecoScore || ''] || 'text-gray-400 bg-gray-500/20 border-gray-500/40';
 
     return (
         <motion.div
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed inset-x-0 bottom-0 top-16 bg-gradient-to-b from-gray-900 to-black rounded-t-[32px] z-50 overflow-hidden border-t border-white/10"
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="fixed inset-x-0 bottom-0 top-12 bg-gradient-to-b from-gray-900 to-black rounded-t-[32px] z-[100] overflow-hidden border-t border-white/10"
         >
             {/* Header */}
-            <div className="sticky top-0 z-10 bg-gradient-to-b from-gray-900 via-gray-900 to-transparent p-6 pb-8">
-                <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4" />
+            <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur-xl px-6 pt-4 pb-6">
+                {/* Drag Handle */}
+                <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-5" />
 
-                <div className="flex justify-between items-start">
-                    <div className="flex-1 pr-4">
-                        <h2 className="text-2xl font-bold text-white leading-tight">{data.name}</h2>
-                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <div className="flex justify-between items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                        <h2 className="text-2xl font-bold text-white leading-tight truncate">{data.name}</h2>
+                        <div className="flex items-center gap-2 mt-3 flex-wrap">
                             {data.category && (
-                                <span className="bg-white/10 px-2.5 py-1 rounded-full text-[10px] uppercase tracking-widest text-white/50">
+                                <span className="bg-white/10 px-3 py-1.5 rounded-full text-[10px] uppercase tracking-widest text-white/60">
                                     {data.category}
                                 </span>
                             )}
                             {data.ecoScore && (
-                                <span className={`px-3 py-1 rounded-full text-sm font-bold border ${ecoScoreColor}`}>
-                                    Eco Score: {data.ecoScore}
+                                <span className={`px-4 py-1.5 rounded-full text-sm font-bold border-2 ${ecoScoreColor}`}>
+                                    Eco: {data.ecoScore}
                                 </span>
                             )}
                         </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
+                        className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-colors flex-shrink-0"
+                        aria-label="Close"
                     >
-                        <X size={20} className="text-white" />
+                        <X size={22} className="text-white" />
                     </button>
                 </div>
             </div>
 
-            {/* Tab Navigation */}
-            <div className="px-6">
-                <div className="flex gap-2 p-1 bg-white/5 rounded-2xl">
+            {/* Tab Navigation - Larger touch targets */}
+            <div className="px-4">
+                <div className="flex gap-1 p-1.5 bg-white/5 rounded-2xl">
                     {[
                         { id: 'impact', label: 'Impact', icon: Wind },
-                        { id: 'alternatives', label: 'Alternatives', icon: Leaf },
+                        { id: 'alternatives', label: 'Swaps', icon: Leaf },
                         { id: 'recycle', label: 'Recycle', icon: Recycle },
                     ].map((tab) => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
+                            onClick={() => setActiveTab(tab.id as typeof activeTab)}
                             className={clsx(
-                                "flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2",
+                                "flex-1 py-3.5 px-4 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2",
                                 activeTab === tab.id
                                     ? "bg-white text-black"
-                                    : "text-white/50 hover:text-white"
+                                    : "text-white/50 hover:text-white active:bg-white/10"
                             )}
                         >
-                            <tab.icon size={16} />
+                            <tab.icon size={18} />
                             {tab.label}
                         </button>
                     ))}
                 </div>
             </div>
 
-            {/* Content */}
-            <div className="p-6 pt-4 overflow-y-auto max-h-[calc(100%-200px)] pb-20">
+            {/* Content - with proper safe area */}
+            <div className="p-6 pt-4 overflow-y-auto h-[calc(100%-180px)] pb-safe">
 
                 {/* Impact Tab */}
                 {activeTab === 'impact' && (
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
                         className="space-y-6"
                     >
                         {/* Eco Score Circle */}
-                        <div className="flex justify-center py-4">
-                            <div className="relative w-36 h-36">
-                                <svg className="w-full h-full -rotate-90">
+                        <div className="flex justify-center py-6">
+                            <div className="relative w-40 h-40">
+                                <svg className="w-full h-full -rotate-90" viewBox="0 0 144 144">
                                     <circle cx="72" cy="72" r="64" stroke="rgba(255,255,255,0.1)" strokeWidth="8" fill="none" />
                                     <circle
                                         cx="72" cy="72" r="64"
@@ -129,35 +133,35 @@ export default function ImpactCard({ data, onClose }: ImpactCardProps) {
                                         strokeWidth="8"
                                         fill="none"
                                         strokeDasharray="402"
-                                        strokeDashoffset={402 - (402 * data.bio) / 100}
+                                        strokeDashoffset={402 - (402 * (data.bio || 0)) / 100}
                                         strokeLinecap="round"
                                     />
                                 </svg>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                    <div className="text-4xl font-bold text-white">{data.bio}</div>
-                                    <div className="text-[10px] uppercase tracking-widest text-white/40">Eco Index</div>
+                                    <div className="text-5xl font-bold text-white">{data.bio || 0}</div>
+                                    <div className="text-[11px] uppercase tracking-widest text-white/40 mt-1">Eco Index</div>
                                 </div>
                             </div>
                         </div>
 
                         {/* Metrics Grid */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                                <div className="flex items-center gap-2 text-white/40 text-xs mb-2">
-                                    <Wind size={14} />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                <div className="flex items-center gap-2 text-white/50 text-xs mb-3">
+                                    <Wind size={16} />
                                     <span>Carbon Footprint</span>
                                 </div>
-                                <div className="text-2xl font-light text-white">
-                                    {data.co2}<span className="text-sm opacity-50 ml-1">kg</span>
+                                <div className="text-3xl font-light text-white">
+                                    {data.co2}<span className="text-base opacity-50 ml-1">kg</span>
                                 </div>
                             </div>
-                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                                <div className="flex items-center gap-2 text-white/40 text-xs mb-2">
-                                    <Droplets size={14} />
+                            <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                <div className="flex items-center gap-2 text-white/50 text-xs mb-3">
+                                    <Droplets size={16} />
                                     <span>Water Usage</span>
                                 </div>
-                                <div className="text-2xl font-light text-white">
-                                    {data.water}<span className="text-sm opacity-50 ml-1">L</span>
+                                <div className="text-3xl font-light text-white">
+                                    {data.water}<span className="text-base opacity-50 ml-1">L</span>
                                 </div>
                             </div>
                         </div>
@@ -165,15 +169,15 @@ export default function ImpactCard({ data, onClose }: ImpactCardProps) {
                         {/* Red Flags */}
                         {data.redFlags && data.redFlags.length > 0 && (
                             <div>
-                                <h3 className="text-white/80 text-sm font-medium mb-3 flex items-center gap-2">
-                                    <AlertTriangle size={14} className="text-amber-400" />
+                                <h3 className="text-white/80 font-semibold mb-4 flex items-center gap-2">
+                                    <AlertTriangle size={18} className="text-amber-400" />
                                     Environmental Concerns
                                 </h3>
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                     {data.redFlags.map((flag, i) => (
                                         <div
                                             key={i}
-                                            className="bg-amber-500/10 border border-amber-500/20 px-4 py-3 rounded-xl text-amber-300 text-sm"
+                                            className="bg-amber-500/10 border border-amber-500/25 px-4 py-3.5 rounded-xl text-amber-200 text-sm leading-relaxed"
                                         >
                                             ⚠️ {flag}
                                         </div>
@@ -187,38 +191,42 @@ export default function ImpactCard({ data, onClose }: ImpactCardProps) {
                 {/* Alternatives Tab */}
                 {activeTab === 'alternatives' && (
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="space-y-3"
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="space-y-4"
                     >
-                        <p className="text-white/40 text-sm mb-4">
-                            Better choices for the planet
+                        <p className="text-white/50 text-sm mb-5">
+                            🌱 Better choices for the planet
                         </p>
 
                         {data.alternatives && data.alternatives.length > 0 ? (
                             data.alternatives.map((alt, i) => (
-                                <div
+                                <motion.div
                                     key={i}
-                                    className="bg-gradient-to-r from-green-500/10 to-transparent p-4 rounded-2xl border border-green-500/20 group"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: i * 0.1 }}
+                                    className="bg-gradient-to-r from-green-500/15 to-transparent p-5 rounded-2xl border border-green-500/25 group hover:border-green-500/40 transition-colors"
                                 >
-                                    <div className="flex items-start justify-between">
+                                    <div className="flex items-start justify-between gap-4">
                                         <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <Star size={14} className="text-green-400" />
-                                                <span className="text-white font-medium">{alt.name}</span>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Star size={16} className="text-green-400" />
+                                                <span className="text-white font-semibold">{alt.name}</span>
                                             </div>
                                             <div className="text-green-400 text-sm mt-1">{alt.savings}</div>
                                             {alt.reason && (
-                                                <div className="text-white/40 text-xs mt-2">{alt.reason}</div>
+                                                <div className="text-white/40 text-xs mt-2 leading-relaxed">{alt.reason}</div>
                                             )}
                                         </div>
-                                        <ChevronRight className="text-white/20 group-hover:text-white/50 transition-colors" />
+                                        <ChevronRight size={20} className="text-white/20 group-hover:text-white/50 transition-colors mt-1" />
                                     </div>
-                                </div>
+                                </motion.div>
                             ))
                         ) : (
-                            <div className="text-center py-8 text-white/30">
-                                No alternatives found
+                            <div className="text-center py-12 text-white/30">
+                                <Leaf size={40} className="mx-auto mb-4 opacity-50" />
+                                <p>No alternatives found</p>
                             </div>
                         )}
                     </motion.div>
@@ -227,38 +235,38 @@ export default function ImpactCard({ data, onClose }: ImpactCardProps) {
                 {/* Recycle Tab */}
                 {activeTab === 'recycle' && (
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="space-y-4"
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="space-y-5"
                     >
                         {data.recycling ? (
                             <>
                                 {/* Recyclable Badge */}
                                 <div className={clsx(
-                                    "p-4 rounded-2xl border flex items-center gap-4",
+                                    "p-5 rounded-2xl border flex items-center gap-5",
                                     data.recycling.recyclable
-                                        ? "bg-green-500/10 border-green-500/20"
-                                        : "bg-red-500/10 border-red-500/20"
+                                        ? "bg-green-500/10 border-green-500/25"
+                                        : "bg-red-500/10 border-red-500/25"
                                 )}>
-                                    <Recycle size={32} className={data.recycling.recyclable ? "text-green-400" : "text-red-400"} />
+                                    <Recycle size={36} className={data.recycling.recyclable ? "text-green-400" : "text-red-400"} />
                                     <div>
-                                        <div className={clsx("font-bold", data.recycling.recyclable ? "text-green-400" : "text-red-400")}>
+                                        <div className={clsx("font-bold text-lg", data.recycling.recyclable ? "text-green-400" : "text-red-400")}>
                                             {data.recycling.recyclable ? "Recyclable" : "Not Easily Recyclable"}
                                         </div>
-                                        <div className="text-white/50 text-sm">Check local guidelines</div>
+                                        <div className="text-white/50 text-sm mt-1">Check local guidelines</div>
                                     </div>
                                 </div>
 
                                 {/* Materials */}
-                                {data.recycling.materials.length > 0 && (
-                                    <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                                        <div className="flex items-center gap-2 text-white/60 text-sm mb-3">
-                                            <Package size={14} />
+                                {data.recycling.materials && data.recycling.materials.length > 0 && (
+                                    <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                        <div className="flex items-center gap-2 text-white/60 text-sm mb-4">
+                                            <Package size={16} />
                                             Materials
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                             {data.recycling.materials.map((mat, i) => (
-                                                <span key={i} className="bg-white/10 px-3 py-1 rounded-full text-sm text-white">
+                                                <span key={i} className="bg-white/10 px-4 py-2 rounded-full text-sm text-white">
                                                     {mat}
                                                 </span>
                                             ))}
@@ -267,25 +275,27 @@ export default function ImpactCard({ data, onClose }: ImpactCardProps) {
                                 )}
 
                                 {/* How to Dispose */}
-                                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                                    <div className="flex items-center gap-2 text-white/60 text-sm mb-3">
-                                        <Recycle size={14} />
-                                        How to Dispose
+                                {data.recycling.howToDispose && (
+                                    <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                        <div className="flex items-center gap-2 text-white/60 text-sm mb-4">
+                                            <Recycle size={16} />
+                                            How to Dispose
+                                        </div>
+                                        <p className="text-white leading-relaxed">{data.recycling.howToDispose}</p>
                                     </div>
-                                    <p className="text-white text-sm">{data.recycling.howToDispose}</p>
-                                </div>
+                                )}
 
                                 {/* Reuse Ideas */}
-                                {data.recycling.reuseIdeas.length > 0 && (
-                                    <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                                        <div className="flex items-center gap-2 text-white/60 text-sm mb-3">
-                                            <Lightbulb size={14} />
+                                {data.recycling.reuseIdeas && data.recycling.reuseIdeas.length > 0 && (
+                                    <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                        <div className="flex items-center gap-2 text-white/60 text-sm mb-4">
+                                            <Lightbulb size={16} />
                                             Reuse Ideas
                                         </div>
-                                        <ul className="space-y-2">
+                                        <ul className="space-y-3">
                                             {data.recycling.reuseIdeas.map((idea, i) => (
-                                                <li key={i} className="text-white text-sm flex items-start gap-2">
-                                                    <span className="text-cyan-400">•</span>
+                                                <li key={i} className="text-white text-sm flex items-start gap-3">
+                                                    <span className="text-cyan-400 mt-0.5">💡</span>
                                                     {idea}
                                                 </li>
                                             ))}
@@ -294,8 +304,9 @@ export default function ImpactCard({ data, onClose }: ImpactCardProps) {
                                 )}
                             </>
                         ) : (
-                            <div className="text-center py-8 text-white/30">
-                                Recycling information not available
+                            <div className="text-center py-12 text-white/30">
+                                <Recycle size={40} className="mx-auto mb-4 opacity-50" />
+                                <p>Recycling information not available</p>
                             </div>
                         )}
                     </motion.div>
