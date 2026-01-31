@@ -3,16 +3,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Webcam from 'react-webcam';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Scan, Link as LinkIcon, Zap, ZapOff, Loader2 } from 'lucide-react';
+import { Scan, Link as LinkIcon, Zap, ZapOff, Loader2, Image as ImageIcon } from 'lucide-react';
 import { BrowserMultiFormatReader } from '@zxing/library';
-import clsx from 'clsx';
+import clsx';
 // Will import new components as we build them
 // import ImpactCard from './ImpactCard'; 
 // import NavDock from './NavDock';
-
-const videoConstraints = {
-    facingMode: { exact: "environment" } // Force back camera on mobile
-}; // Fallback to "environment" in catch block if exact fails
 
 export default function TheLens() {
     const webcamRef = useRef<Webcam>(null);
@@ -22,6 +18,19 @@ export default function TheLens() {
     const [torchOn, setTorchOn] = useState(false);
     const [cameraError, setCameraError] = useState(false);
     const [result, setResult] = useState<any>(null);
+
+    // Fallback Logic: Try "environment" first. If fails (on laptops), fall back to any camera.
+    const [videoConstraints, setVideoConstraints] = useState<any>({ facingMode: { exact: "environment" } });
+
+    const handleCameraError = useCallback(() => {
+        if (videoConstraints.facingMode?.exact === "environment") {
+            console.warn("Back camera not found, trying fallback...");
+            setVideoConstraints({ facingMode: "user" }); // Try front/webcam
+            setCameraError(false); // Reset error to try again
+        } else {
+            setCameraError(true); // Genuine failure
+        }
+    }, [videoConstraints]);
 
     // Toggle Torch
     const toggleTorch = async () => {
@@ -111,8 +120,8 @@ export default function TheLens() {
                                     audio={false}
                                     ref={webcamRef}
                                     screenshotFormat="image/jpeg"
-                                    videoConstraints={videoConstraints} // CONSTANT reference prevents re-mounts
-                                    onUserMediaError={() => setCameraError(true)}
+                                    videoConstraints={videoConstraints}
+                                    onUserMediaError={handleCameraError}
                                     className="h-full w-full object-cover"
                                     playsInline
                                 />
@@ -204,13 +213,37 @@ export default function TheLens() {
                     {/* Shutter Button - Only visible in Scan Mode */}
                     <AnimatePresence>
                         {mode === 'scan' && (
-                            <motion.button
-                                initial={{ scale: 0, width: 0 }} animate={{ scale: 1, width: 'auto' }} exit={{ scale: 0, width: 0 }}
-                                onClick={handleCapture}
-                                className="mx-1 w-16 h-16 bg-white rounded-full flex items-center justify-center active:scale-90 transition-transform shadow-[0_0_25px_rgba(255,255,255,0.4)]"
-                            >
-                                <div className="w-14 h-14 border-[3px] border-black rounded-full" />
-                            </motion.button>
+                            <>
+                                <motion.button
+                                    initial={{ scale: 0, width: 0 }} animate={{ scale: 1, width: 'auto' }} exit={{ scale: 0, width: 0 }}
+                                    onClick={handleCapture}
+                                    className="mx-1 w-16 h-16 bg-white rounded-full flex items-center justify-center active:scale-95 transition-transform shadow-[0_0_25px_rgba(255,255,255,0.4)]"
+                                >
+                                    <div className="w-14 h-14 border-[3px] border-black rounded-full" />
+                                </motion.button>
+
+                                {/* Image Upload Component - Hidden Input + Trigger */}
+                                <div className="absolute right-[-60px] top-1/2 -translate-y-1/2">
+                                    <label className="p-3 bg-black/50 backdrop-blur-md border border-white/10 rounded-full text-white cursor-pointer active:scale-90 transition-transform flex items-center justify-center">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    const reader = new FileReader();
+                                                    reader.onloadend = () => {
+                                                        handleAnalyze({ image: reader.result as string });
+                                                    };
+                                                    reader.readAsDataURL(file);
+                                                }
+                                            }}
+                                        />
+                                        <ImageIcon size={20} />
+                                    </label>
+                                </div>
+                            </>
                         )}
                     </AnimatePresence>
 

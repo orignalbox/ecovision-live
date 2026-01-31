@@ -2,8 +2,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const modelVision = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Fast multimodal
-const modelText = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+// Using Gemini 1.5 Pro for "Perfect" reasoning and vision quality as requested
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
 // Prompt Helper
 const SYSTEM_PROMPT = `
@@ -18,7 +18,7 @@ Return ONLY valid JSON with this structure:
     { "name": "Specific Eco Brand/Product", "savings": "e.g. Save 12kg CO2" },
     { "name": "Generic Better Option", "savings": "e.g. Save 400L Water" }
   ],
-  "redFlags": ["Microplastics", "Palm Oil", "Non-recyclable"] (optional list of negative traits)
+  "redFlags": ["Microplastics", "Palm Oil", "Non-recyclable"] (list strings of negative traits if any)
 }
 Be precise. If data is unknown, estimate based on category (e.g., Beef = high CO2, T-Shirt = high Water).
 `;
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
             }
 
             // B. Ask AI for Impact & Swaps based on Name
-            const result = await modelText.generateContent([
+            const result = await model.generateContent([
                 SYSTEM_PROMPT,
                 `Analyze this product identified by barcode: "${productName}".`
             ]);
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
 
         // 3. URL FLOW (Text Analysis)
         if (url) {
-            const result = await modelText.generateContent([
+            const result = await model.generateContent([
                 SYSTEM_PROMPT,
                 `Analyze this e-commerce URL: "${url}". Infer the product and its impact.`
             ]);
@@ -77,7 +77,6 @@ export async function POST(req: Request) {
 
         // 4. IMAGE FLOW (Vision)
         if (image) {
-            const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
             const base64Data = image.split(',')[1] || image;
             const result = await model.generateContent([
                 SYSTEM_PROMPT,
