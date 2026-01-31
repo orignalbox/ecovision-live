@@ -53,48 +53,47 @@ export async function POST(req: Request) {
             if (offData.status === 1) {
                 productName = offData.product.product_name;
             }
+
+            // B. Ask AI for Impact & Swaps based on Name
+            const result = await modelText.generateContent([
+                SYSTEM_PROMPT,
+                `Analyze this product identified by barcode: "${productName}".`
+            ]);
+            const response = await result.response;
+            const json = JSON.parse(response.text().replace(/```json|```/g, '').trim());
+            return NextResponse.json({ ...json, name: productName });
         }
 
-        // Fallback if barcode lookup failed or no barcode, and API key is missing
-        if (!process.env.GEMINI_API_KEY) {
-            console.warn("GEMINI_API_KEY not set, using mock data (after barcode attempt)");
-            // Mock Fallback (Duplicate for safety if code structure changes)
-            return NextResponse.json({
-                name: "Mock Product (No API Key)",
-                co2: 5.5,
-                water: 120,
-                bio: 75,
-                alternatives: [
-                    { name: "Eco Alternative A", savings: "Save 300L Water" },
-                    { name: "Eco Alternative B", savings: "Save 1.5kg CO2" }
-                ]
-            });
+        // 3. URL FLOW (Text Analysis)
+        if (url) {
+            const result = await modelText.generateContent([
+                SYSTEM_PROMPT,
+                `Analyze this e-commerce URL: "${url}". Infer the product and its impact.`
+            ]);
+            const text = await result.response.text();
+            const json = JSON.parse(text.replace(/```json|```/g, '').trim());
+            return NextResponse.json(json);
         }
 
-        // Existing Image Logic
-        const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
-
-        // Remove header from base64 if present
-        const base64Data = image.split(',')[1] || image;
-
-        const result = await model.generateContent([
-            "Identify this product. Estimate its environmental impact (Carbon Footprint in kg, Water in L, Biodiversity Score 0-100). Suggest 2 eco-friendly alternatives. Return ONLY valid JSON in this format: { \"name\": \"Product Name\", \"co2\": number, \"water\": number, \"bio\": number, \"alternatives\": [{ \"name\": \"Alt Name\", \"savings\": \"Short impact string\" }] }",
-            {
-                inlineData: {
-                    data: base64Data,
-                    mimeType: "image/jpeg",
+        // 4. IMAGE FLOW (Vision)
+        if (image) {
+            const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
+            const base64Data = image.split(',')[1] || image;
+            const result = await model.generateContent([
+                SYSTEM_PROMPT,
+                {
+                    inlineData: {
+                        data: base64Data,
+                        mimeType: "image/jpeg",
+                    },
                 },
-            },
-        ]);
+            ]);
+            const text = await result.response.text();
+            const json = JSON.parse(text.replace(/```json|```/g, '').trim());
+            return NextResponse.json(json);
+        }
 
-        const response = await result.response;
-        const text = response.text();
-
-        // Clean up markdown code blocks if present
-        const cleanJson = text.replace(/```json|```/g, '').trim();
-        const data = JSON.parse(cleanJson);
-
-        return NextResponse.json(data);
+        return NextResponse.json({ error: "Invalid Input" }, { status: 400 });
     } catch (error) {
         console.error("Analysis Error:", error);
         return NextResponse.json({ error: "Failed to analyze image" }, { status: 500 });

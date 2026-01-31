@@ -111,7 +111,7 @@ export default function TheLens() {
                                     audio={false}
                                     ref={webcamRef}
                                     screenshotFormat="image/jpeg"
-                                    videoConstraints={{ facingMode: "environment" }} // Relaxed constraint for wider support
+                                    videoConstraints={videoConstraints} // CONSTANT reference prevents re-mounts
                                     onUserMediaError={() => setCameraError(true)}
                                     className="h-full w-full object-cover"
                                     playsInline
