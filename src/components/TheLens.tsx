@@ -5,7 +5,7 @@ import Webcam from 'react-webcam';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Scan, Link as LinkIcon, Zap, ZapOff, Loader2, Image as ImageIcon } from 'lucide-react';
 import { BrowserMultiFormatReader } from '@zxing/library';
-import clsx';
+import clsx from 'clsx';
 // Will import new components as we build them
 // import ImpactCard from './ImpactCard'; 
 // import NavDock from './NavDock';

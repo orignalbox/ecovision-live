@@ -8,8 +8,8 @@ export default function manifest(): MetadataRoute.Manifest {
         description: 'Scan products to see their planet cost.',
         start_url: '/',
         display: 'standalone',
-        background_color: '#F5F7FA',
-        theme_color: '#F5F7FA',
+        background_color: '#050505',
+        theme_color: '#050505',
         icons: [
             {
                 src: '/icon-192.png',
