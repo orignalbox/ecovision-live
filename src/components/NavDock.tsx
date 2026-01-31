@@ -17,9 +17,9 @@ export default function NavDock({ activeTab, onTabChange }: NavDockProps) {
     ] as const;
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-[60] flex justify-center pb-6 pt-2 pointer-events-none bg-gradient-to-t from-black/80 to-transparent">
+        <div className="flex justify-center py-3 px-4">
             <nav
-                className="bg-white/10 backdrop-blur-2xl border border-white/10 rounded-full p-2 flex items-center gap-2 shadow-2xl pointer-events-auto"
+                className="bg-white/10 backdrop-blur-2xl border border-white/10 rounded-full p-1.5 flex items-center gap-1 shadow-2xl"
                 role="navigation"
                 aria-label="Main navigation"
             >

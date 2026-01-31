@@ -20,16 +20,15 @@ export default function TheLens() {
     const [cameraError, setCameraError] = useState<string | null>(null);
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
-    const [isCapturing, setIsCapturing] = useState(false);
+    const [flashVisible, setFlashVisible] = useState(false);
 
     const addLog = useStore((state) => state.addLog);
 
-    // Simple camera initialization
+    // Camera initialization
     const initCamera = useCallback(async () => {
         setCameraError(null);
         setCameraReady(false);
 
-        // Cleanup existing stream
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(t => t.stop());
             streamRef.current = null;
@@ -53,8 +52,7 @@ export default function TheLens() {
                 await videoRef.current.play();
                 setCameraReady(true);
             }
-        } catch (err: any) {
-            console.error('Camera error:', err);
+        } catch {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                 streamRef.current = stream;
@@ -68,13 +66,12 @@ export default function TheLens() {
                     await videoRef.current.play();
                     setCameraReady(true);
                 }
-            } catch (e: any) {
+            } catch {
                 setCameraError('Camera access denied. Please allow camera permissions.');
             }
         }
     }, []);
 
-    // Camera lifecycle
     useEffect(() => {
         if (mode === 'scan') {
             initCamera();
@@ -94,8 +91,8 @@ export default function TheLens() {
         };
     }, [mode, initCamera]);
 
-    // Main analysis function - defined BEFORE handleCapture to avoid stale closure
-    const analyze = useCallback(async (payload: { image?: string; barcode?: string; url?: string }) => {
+    // Analysis function
+    const analyze = useCallback(async (payload: { image?: string; url?: string }) => {
         setIsProcessing(true);
         setError(null);
 
@@ -126,15 +123,13 @@ export default function TheLens() {
         }
     }, [addLog]);
 
-    // Capture image - now includes analyze in closure properly
+    // Capture
     const handleCapture = useCallback(() => {
         if (!videoRef.current || !canvasRef.current || !cameraReady) return;
 
-        // Visual feedback
-        setIsCapturing(true);
+        setFlashVisible(true);
         if (navigator.vibrate) navigator.vibrate(100);
-
-        setTimeout(() => setIsCapturing(false), 150);
+        setTimeout(() => setFlashVisible(false), 150);
 
         const video = videoRef.current;
         const canvas = canvasRef.current;
@@ -176,30 +171,23 @@ export default function TheLens() {
     };
 
     return (
-        <div className="relative h-full w-full bg-black">
+        <div className="h-full w-full bg-black flex flex-col">
             <canvas ref={canvasRef} className="hidden" />
 
-            {/* Camera Flash Effect */}
-            <AnimatePresence>
-                {isCapturing && (
-                    <motion.div
-                        initial={{ opacity: 1 }}
-                        animate={{ opacity: 0 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute inset-0 z-50 bg-white pointer-events-none"
-                    />
-                )}
-            </AnimatePresence>
+            {/* Flash Effect */}
+            {flashVisible && (
+                <div className="absolute inset-0 z-50 bg-white pointer-events-none" />
+            )}
 
-            {/* Mode Toggle - Top Center */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 safe-area-top">
-                <div className="bg-black/70 backdrop-blur-xl border border-white/10 rounded-full p-1.5 flex items-center gap-1">
+            {/* Top Bar */}
+            <div className="flex-shrink-0 flex items-center justify-between p-4 relative z-20">
+                {/* Mode Toggle */}
+                <div className="bg-black/70 backdrop-blur-xl border border-white/10 rounded-full p-1 flex items-center gap-1">
                     <button
                         onClick={() => setMode('scan')}
                         className={clsx(
-                            "px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2",
-                            mode === 'scan' ? "bg-white text-black" : "text-white/60 hover:text-white"
+                            "px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2",
+                            mode === 'scan' ? "bg-white text-black" : "text-white/60"
                         )}
                     >
                         <Camera size={16} /> Scan
@@ -207,148 +195,133 @@ export default function TheLens() {
                     <button
                         onClick={() => setMode('url')}
                         className={clsx(
-                            "px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2",
-                            mode === 'url' ? "bg-white text-black" : "text-white/60 hover:text-white"
+                            "px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2",
+                            mode === 'url' ? "bg-white text-black" : "text-white/60"
                         )}
                     >
                         <LinkIcon size={16} /> URL
                     </button>
                 </div>
+
+                {/* Upload Button */}
+                {mode === 'scan' && (
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="p-3 bg-black/70 backdrop-blur-md rounded-full border border-white/10"
+                        aria-label="Upload image"
+                    >
+                        <ImagePlus size={20} className="text-white" />
+                    </button>
+                )}
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                />
             </div>
 
-            {/* Upload Button - Top Right */}
-            {mode === 'scan' && (
-                <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute top-4 right-4 z-30 p-3.5 bg-black/70 backdrop-blur-md rounded-full border border-white/10 hover:bg-black/90 transition-colors"
-                    aria-label="Upload image"
-                >
-                    <ImagePlus size={22} className="text-white" />
-                </button>
-            )}
-            <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="hidden"
-            />
-
             {/* Main Content */}
-            <AnimatePresence mode="wait">
-                {mode === 'scan' ? (
-                    <motion.div
-                        key="camera"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0"
-                    >
-                        <video
-                            ref={videoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            className="h-full w-full object-cover"
-                        />
+            <div className="flex-1 relative overflow-hidden">
+                <AnimatePresence mode="wait">
+                    {mode === 'scan' ? (
+                        <motion.div
+                            key="camera"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0"
+                        >
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className="h-full w-full object-cover"
+                            />
 
-                        {/* Camera Error */}
-                        {cameraError && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 p-8">
-                                <Camera size={56} className="text-white/20 mb-6" />
-                                <p className="text-white/70 text-center mb-6 text-lg">{cameraError}</p>
-                                <button
-                                    onClick={initCamera}
-                                    className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-full flex items-center gap-2 text-white transition-colors"
-                                >
-                                    <RefreshCw size={18} /> Retry Camera
-                                </button>
-                            </div>
-                        )}
+                            {/* Camera Error */}
+                            {cameraError && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 p-8">
+                                    <Camera size={56} className="text-white/20 mb-6" />
+                                    <p className="text-white/70 text-center mb-6 text-lg">{cameraError}</p>
+                                    <button
+                                        onClick={initCamera}
+                                        className="px-6 py-3 bg-white/10 rounded-full flex items-center gap-2 text-white"
+                                    >
+                                        <RefreshCw size={18} /> Retry
+                                    </button>
+                                </div>
+                            )}
 
-                        {/* Viewfinder - ALL 4 CORNERS */}
-                        {cameraReady && !cameraError && (
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <div className="w-64 h-64 relative">
-                                    {/* Top-Left */}
-                                    <div className="absolute -top-1 -left-1 w-10 h-10 border-t-[3px] border-l-[3px] border-cyan-400 rounded-tl-2xl" />
-                                    {/* Top-Right */}
-                                    <div className="absolute -top-1 -right-1 w-10 h-10 border-t-[3px] border-r-[3px] border-cyan-400 rounded-tr-2xl" />
-                                    {/* Bottom-Left */}
-                                    <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-[3px] border-l-[3px] border-cyan-400 rounded-bl-2xl" />
-                                    {/* Bottom-Right (WAS MISSING!) */}
-                                    <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-[3px] border-r-[3px] border-cyan-400 rounded-br-2xl" />
-
-                                    {/* Center crosshair */}
-                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4">
-                                        <div className="absolute top-1/2 left-0 right-0 h-px bg-cyan-400/50" />
-                                        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-cyan-400/50" />
+                            {/* Viewfinder */}
+                            {cameraReady && !cameraError && (
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <div className="w-64 h-64 relative">
+                                        <div className="absolute -top-1 -left-1 w-10 h-10 border-t-[3px] border-l-[3px] border-cyan-400 rounded-tl-2xl" />
+                                        <div className="absolute -top-1 -right-1 w-10 h-10 border-t-[3px] border-r-[3px] border-cyan-400 rounded-tr-2xl" />
+                                        <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-[3px] border-l-[3px] border-cyan-400 rounded-bl-2xl" />
+                                        <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-[3px] border-r-[3px] border-cyan-400 rounded-br-2xl" />
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="url"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 flex items-center justify-center p-6 bg-gradient-to-b from-gray-900 to-black"
+                        >
+                            <form onSubmit={handleUrlSubmit} className="w-full max-w-md">
+                                <h2 className="text-2xl font-bold text-white mb-2 text-center">Analyze Product URL</h2>
+                                <p className="text-white/50 text-sm mb-8 text-center">
+                                    Paste any product page link
+                                </p>
+                                <div className="relative mb-6">
+                                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={20} />
+                                    <input
+                                        type="url"
+                                        value={urlInput}
+                                        onChange={(e) => setUrlInput(e.target.value)}
+                                        placeholder="https://amazon.com/product..."
+                                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/50"
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    disabled={!urlInput.trim() || isProcessing}
+                                    className="w-full bg-white text-black font-bold py-4 rounded-2xl disabled:opacity-40 flex items-center justify-center gap-2"
+                                >
+                                    {isProcessing && <Loader2 size={20} className="animate-spin" />}
+                                    {isProcessing ? 'Analyzing...' : 'Analyze Impact'}
+                                </button>
+                            </form>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
 
-                        {/* Status Text */}
-                        <div className="absolute bottom-52 left-0 right-0 text-center">
-                            <p className="text-white/60 text-sm font-medium">
-                                {cameraReady ? 'Point at product & tap to capture' : 'Starting camera...'}
-                            </p>
-                        </div>
-                    </motion.div>
-                ) : (
-                    <motion.div
-                        key="url"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0 flex items-center justify-center p-6 bg-gradient-to-b from-gray-900 to-black"
-                    >
-                        <form onSubmit={handleUrlSubmit} className="w-full max-w-md">
-                            <h2 className="text-2xl font-bold text-white mb-2 text-center">Analyze Product URL</h2>
-                            <p className="text-white/50 text-sm mb-8 text-center">
-                                Paste any product page link to analyze its environmental impact
-                            </p>
-                            <div className="relative mb-6">
-                                <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={20} />
-                                <input
-                                    type="url"
-                                    value={urlInput}
-                                    onChange={(e) => setUrlInput(e.target.value)}
-                                    placeholder="https://amazon.com/product..."
-                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20"
-                                />
-                            </div>
-                            <button
-                                type="submit"
-                                disabled={!urlInput.trim() || isProcessing}
-                                className="w-full bg-white text-black font-bold py-4 rounded-2xl disabled:opacity-40 hover:bg-white/90 transition-colors flex items-center justify-center gap-2"
-                            >
-                                {isProcessing && <Loader2 size={20} className="animate-spin" />}
-                                {isProcessing ? 'Analyzing...' : 'Analyze Impact'}
-                            </button>
-                        </form>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Capture Button - Well above NavDock */}
+            {/* Bottom Controls - Capture Button */}
             {mode === 'scan' && (
-                <div className="absolute bottom-36 left-0 right-0 flex justify-center z-[55]">
-                    <motion.button
+                <div className="flex-shrink-0 flex flex-col items-center py-6 relative z-20">
+                    <p className="text-white/50 text-sm mb-4">
+                        {cameraReady ? 'Point at product & tap to capture' : 'Starting camera...'}
+                    </p>
+                    <button
                         onClick={handleCapture}
                         disabled={!cameraReady || isProcessing}
-                        whileTap={{ scale: 0.9 }}
                         className={clsx(
-                            "w-20 h-20 bg-white rounded-full flex items-center justify-center transition-all",
-                            "disabled:opacity-30 disabled:cursor-not-allowed",
-                            "shadow-[0_0_40px_rgba(255,255,255,0.4)]",
-                            "hover:shadow-[0_0_60px_rgba(255,255,255,0.6)]",
-                            isCapturing && "scale-90"
+                            "w-20 h-20 bg-white rounded-full flex items-center justify-center",
+                            "disabled:opacity-30 active:scale-95 transition-transform",
+                            "shadow-[0_0_30px_rgba(255,255,255,0.3)]"
                         )}
                         aria-label="Capture photo"
                     >
-                        <div className="w-16 h-16 border-4 border-black/80 rounded-full" />
-                    </motion.button>
+                        <div className="w-16 h-16 border-4 border-black rounded-full" />
+                    </button>
                 </div>
             )}
 
@@ -359,14 +332,10 @@ export default function TheLens() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="absolute inset-0 z-[80] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center"
+                        className="absolute inset-0 z-40 bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center"
                     >
-                        <div className="relative mb-8">
-                            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-cyan-500 to-green-500 blur-2xl animate-pulse" />
-                            <Loader2 size={40} className="absolute inset-0 m-auto text-white animate-spin" />
-                        </div>
-                        <p className="text-white text-xl font-light">Analyzing...</p>
-                        <p className="text-white/40 text-sm mt-2">Calculating environmental impact</p>
+                        <Loader2 size={48} className="text-white animate-spin mb-4" />
+                        <p className="text-white text-xl">Analyzing...</p>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -378,13 +347,10 @@ export default function TheLens() {
                         initial={{ opacity: 0, y: 50 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 50 }}
-                        className="absolute bottom-32 left-4 right-4 z-[90] bg-red-500/95 backdrop-blur p-4 rounded-2xl flex items-center gap-3 shadow-lg"
+                        className="absolute bottom-24 left-4 right-4 z-50 bg-red-500/95 backdrop-blur p-4 rounded-2xl flex items-center gap-3"
                     >
                         <p className="text-white flex-1">{error}</p>
-                        <button
-                            onClick={() => setError(null)}
-                            className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                        >
+                        <button onClick={() => setError(null)} className="p-2 hover:bg-white/10 rounded-full">
                             <X size={20} className="text-white" />
                         </button>
                     </motion.div>
