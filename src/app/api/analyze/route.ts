@@ -47,6 +47,49 @@ function parseGeminiResponse(text: string): any {
     }
 }
 
+// Retry with exponential backoff
+async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries: number = 3): Promise<T> {
+    let lastError: any;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await fn();
+        } catch (error: any) {
+            lastError = error;
+            if (error?.status === 429) {
+                // Rate limited - wait and retry
+                const waitTime = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                console.log(`Rate limited, waiting ${waitTime}ms before retry ${i + 1}/${maxRetries}`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            } else {
+                throw error; // Non-retryable error
+            }
+        }
+    }
+    throw lastError;
+}
+
+// Fallback response when API fails
+function getFallbackResponse(inputType: string, inputHint?: string): any {
+    return {
+        name: inputHint || "Product Analysis Unavailable",
+        category: "Unknown",
+        co2: 3.5,
+        water: 100,
+        bio: 50,
+        ecoScore: "C",
+        alternatives: [
+            { name: "Try again in a moment", savings: "API quota limit reached", reason: "Rate limits reset every minute" }
+        ],
+        redFlags: ["Analysis temporarily unavailable - API quota exceeded"],
+        recycling: {
+            recyclable: true,
+            materials: ["Unknown"],
+            howToDispose: "Check local recycling guidelines",
+            reuseIdeas: ["Consider donating or repurposing"]
+        }
+    };
+}
+
 // Fetch URL content with better extraction
 async function fetchUrlContent(url: string): Promise<string> {
     try {
@@ -210,6 +253,17 @@ Countries: ${p.countries || 'Unknown'}
 
     } catch (error: any) {
         console.error("API Error:", error);
+
+        // Check if it's a rate limit error
+        const isRateLimit = error?.status === 429 ||
+            error?.message?.includes('429') ||
+            error?.message?.includes('quota');
+
+        if (isRateLimit) {
+            // Return a graceful fallback instead of error
+            return NextResponse.json(getFallbackResponse("rate_limit"));
+        }
+
         return NextResponse.json({
             name: "Error",
             category: "Unknown",
@@ -224,7 +278,8 @@ Countries: ${p.countries || 'Unknown'}
                 materials: [],
                 howToDispose: "Unable to determine",
                 reuseIdeas: []
-            }
+            },
+            error: error.message
         }, { status: 500 });
     }
 }
