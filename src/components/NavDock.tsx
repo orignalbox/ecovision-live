@@ -18,7 +18,8 @@ export default function NavDock({ activeTab, onTabChange }: NavDockProps) {
     ] as const;
 
     return (
-        <div className="fixed bottom-10 left-0 right-0 z-50 flex justify-center pointer-events-none">
+        // Changed bottom-10 to bottom-6 for better mobile spacing, ensuring it doesn't float too high
+        <div className="fixed bottom-6 left-0 right-0 z-[60] flex justify-center pointer-events-none pb-safe">
             <div className="bg-glass-white backdrop-blur-3xl border border-white/10 rounded-full p-2 flex items-center gap-4 shadow-2xl pointer-events-auto">
                 {tabs.map((tab) => {
                     const Icon = tab.icon;
