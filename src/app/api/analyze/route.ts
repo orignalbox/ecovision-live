@@ -1,62 +1,57 @@
-
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const modelVision = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Fast multimodal
+const modelText = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+// Prompt Helper
+const SYSTEM_PROMPT = `
+You are an environmental impact expert. Analyze the input (Product Name, Image, or URL contents).
+Return ONLY valid JSON with this structure:
+{
+  "name": "Exact Product Name",
+  "co2": number (estimated kg CO2e footprint),
+  "water": number (estimated Liters water usage),
+  "bio": number (0-100 Biodiversity Safety Score, 100=Best),
+  "alternatives": [
+    { "name": "Specific Eco Brand/Product", "savings": "e.g. Save 12kg CO2" },
+    { "name": "Generic Better Option", "savings": "e.g. Save 400L Water" }
+  ],
+  "redFlags": ["Microplastics", "Palm Oil", "Non-recyclable"] (optional list of negative traits)
+}
+Be precise. If data is unknown, estimate based on category (e.g., Beef = high CO2, T-Shirt = high Water).
+`;
 
 export async function POST(req: Request) {
     try {
-        const { image, barcode } = await req.json();
+        const { image, barcode, url } = await req.json();
 
-        if (!process.env.GEMINI_API_KEY && !barcode) {
-            console.warn("GEMINI_API_KEY not set and no barcode provided, using mock data");
-            // Mock Response for Demo/Fallback
+        // 1. MOCK FALLBACK (If no API Key)
+        if (!process.env.GEMINI_API_KEY) {
+            console.warn("No API Key. Returning Demo Data.");
             return NextResponse.json({
-                name: "Mock Product (No API Key)",
-                co2: 5.5,
-                water: 120,
-                bio: 75,
+                name: "Demo Product (Set API Key)",
+                co2: 12.5,
+                water: 450,
+                bio: 60,
                 alternatives: [
-                    { name: "Eco Alternative A", savings: "Save 300L Water" },
-                    { name: "Eco Alternative B", savings: "Save 1.5kg CO2" }
-                ]
+                    { name: "Bamboo Toothbrush", savings: "Plastic Free" },
+                    { name: "Refillable Glass Jar", savings: "Zero Waste" }
+                ],
+                redFlags: ["Mock Data used - Setup Env Var"]
             });
         }
 
-        // HANDLER FOR BARCODE
+        // 2. BARCODE FLOW (Hybrid: OFF + AI)
         if (barcode) {
-            try {
-                // OpenFoodFacts Fetch
-                const offRes = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json`);
-                const offData = await offRes.json();
+            // A. Fetch Identity
+            const offRes = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json`);
+            const offData = await offRes.json();
 
-                if (offData.status === 1) {
-                    const product = offData.product;
-                    // Extract basic info
-                    // If we had a real Impact DB, we'd use it here.
-                    // For now, return mock/estimated data based on categories
-                    const name = product.product_name || "Unknown Product";
-                    const categories = product.categories || "";
-
-                    // Simple keyword heuristic for demo
-                    let co2 = 2.5;
-                    let water = 50;
-                    if (categories.includes('Meat')) { co2 = 15; water = 800; }
-                    if (categories.includes('Vegetable')) { co2 = 0.5; water = 20; }
-                    if (categories.includes('Plastic')) { co2 += 5; }
-
-                    return NextResponse.json({
-                        name,
-                        co2,
-                        water,
-                        bio: 80, // Mock score
-                        alternatives: [
-                            { name: "Generic Alternative", savings: "See Dashboard" }
-                        ]
-                    });
-                }
-            } catch (e) {
-                console.error("Barcode lookup failed", e);
+            let productName = "Unknown Product";
+            if (offData.status === 1) {
+                productName = offData.product.product_name;
             }
         }
 
