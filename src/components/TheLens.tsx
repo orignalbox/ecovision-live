@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Link as LinkIcon, Loader2, ImagePlus, X, RefreshCw, Home } from 'lucide-react';
+import { Camera, Link as LinkIcon, Loader2, ImagePlus, X, RefreshCw, Home, Scan } from 'lucide-react';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
 import clsx from 'clsx';
 import Link from 'next/link';
 import ImpactCard from './ImpactCard';
@@ -13,6 +14,8 @@ export default function TheLens() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
+    const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+    const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     const [mode, setMode] = useState<'scan' | 'url'>('scan');
     const [isProcessing, setIsProcessing] = useState(false);
@@ -21,24 +24,32 @@ export default function TheLens() {
     const [cameraError, setCameraError] = useState<string | null>(null);
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
+    const [scanStatus, setScanStatus] = useState<string>('Initializing...');
 
     const addLog = useStore((state) => state.addLog);
+
+    // Initialize barcode reader
+    useEffect(() => {
+        codeReaderRef.current = new BrowserMultiFormatReader();
+        return () => {
+            codeReaderRef.current?.reset();
+        };
+    }, []);
 
     // Initialize camera
     const initCamera = useCallback(async () => {
         setCameraError(null);
         setCameraReady(false);
+        setScanStatus('Starting camera...');
 
-        // Stop existing stream if any
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(t => t.stop());
             streamRef.current = null;
         }
 
         try {
-            // Try back camera first
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: 'environment' } },
+                video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
                 audio: false
             });
 
@@ -46,38 +57,77 @@ export default function TheLens() {
 
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                // Wait for video to be ready
                 videoRef.current.onloadedmetadata = () => {
                     videoRef.current?.play();
                     setCameraReady(true);
+                    setScanStatus('Scanning for barcodes...');
                 };
             }
         } catch (err: any) {
-            console.error('Camera init error:', err);
-
-            // Fallback: try any camera
+            console.error('Camera error:', err);
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: false
-                });
-
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                 streamRef.current = stream;
-
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream;
                     videoRef.current.onloadedmetadata = () => {
                         videoRef.current?.play();
                         setCameraReady(true);
+                        setScanStatus('Scanning for barcodes...');
                     };
                 }
             } catch (fallbackErr: any) {
-                setCameraError(fallbackErr.message || 'Unable to access camera');
+                setCameraError(fallbackErr.message || 'Camera access denied');
+                setScanStatus('Camera unavailable');
             }
         }
     }, []);
 
-    // Cleanup camera on unmount
+    // Barcode scanning loop - auto-detect and analyze
+    useEffect(() => {
+        if (mode !== 'scan' || !cameraReady || isProcessing || result) {
+            if (scanIntervalRef.current) {
+                clearInterval(scanIntervalRef.current);
+                scanIntervalRef.current = null;
+            }
+            return;
+        }
+
+        scanIntervalRef.current = setInterval(async () => {
+            const video = videoRef.current;
+            if (!video || video.readyState !== 4 || !codeReaderRef.current) return;
+
+            try {
+                const decoded = await codeReaderRef.current.decodeFromVideoElement(video);
+                if (decoded) {
+                    const barcodeValue = decoded.getText();
+                    console.log('Barcode detected:', barcodeValue);
+
+                    // Stop scanning
+                    if (scanIntervalRef.current) {
+                        clearInterval(scanIntervalRef.current);
+                    }
+
+                    // Auto-analyze the barcode
+                    setScanStatus(`Barcode found: ${barcodeValue}`);
+                    analyze({ barcode: barcodeValue });
+                }
+            } catch (err) {
+                if (!(err instanceof NotFoundException)) {
+                    // Ignore not found errors, they're expected
+                }
+            }
+        }, 400);
+
+        return () => {
+            if (scanIntervalRef.current) {
+                clearInterval(scanIntervalRef.current);
+                scanIntervalRef.current = null;
+            }
+        };
+    }, [mode, cameraReady, isProcessing, result]);
+
+    // Camera lifecycle
     useEffect(() => {
         if (mode === 'scan') {
             initCamera();
@@ -87,6 +137,9 @@ export default function TheLens() {
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach(t => t.stop());
                 streamRef.current = null;
+            }
+            if (scanIntervalRef.current) {
+                clearInterval(scanIntervalRef.current);
             }
         };
     }, [mode, initCamera]);
@@ -98,7 +151,6 @@ export default function TheLens() {
         const video = videoRef.current;
         const canvas = canvasRef.current;
 
-        // Set canvas size to video size
         canvas.width = video.videoWidth || 640;
         canvas.height = video.videoHeight || 480;
 
@@ -111,7 +163,7 @@ export default function TheLens() {
         analyze({ image: imageData });
     }, [cameraReady]);
 
-    // Handle file upload
+    // File upload
     const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -121,10 +173,10 @@ export default function TheLens() {
             analyze({ image: reader.result as string });
         };
         reader.readAsDataURL(file);
-        e.target.value = ''; // Reset
+        e.target.value = '';
     }, []);
 
-    // Handle URL submit
+    // URL submit
     const handleUrlSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const trimmedUrl = urlInput.trim();
@@ -155,7 +207,6 @@ export default function TheLens() {
 
             setResult(data);
 
-            // Save to history
             if (data.name) {
                 addLog({
                     name: data.name,
@@ -173,25 +224,24 @@ export default function TheLens() {
     const handleClose = () => {
         setResult(null);
         setError(null);
+        setScanStatus('Scanning for barcodes...');
     };
 
     return (
         <div className="relative h-[100dvh] w-full bg-void-black overflow-hidden">
-            {/* Hidden canvas */}
             <canvas ref={canvasRef} className="hidden" />
 
-            {/* Main Content */}
             <div className="h-full flex flex-col">
                 {/* Header */}
                 <div className="absolute top-4 left-4 right-4 z-30 flex justify-between items-center">
-                    <Link href="/" className="p-3 bg-black/50 backdrop-blur-md rounded-full border border-white/10">
+                    <Link href="/" className="p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10">
                         <Home size={20} className="text-white" />
                     </Link>
 
                     {mode === 'scan' && (
                         <button
                             onClick={() => fileInputRef.current?.click()}
-                            className="p-3 bg-black/50 backdrop-blur-md rounded-full border border-white/10"
+                            className="p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10"
                         >
                             <ImagePlus size={20} className="text-white" />
                         </button>
@@ -206,7 +256,7 @@ export default function TheLens() {
                     className="hidden"
                 />
 
-                {/* Camera / URL View */}
+                {/* Main View */}
                 <div className="flex-1 relative">
                     <AnimatePresence mode="wait">
                         {mode === 'scan' ? (
@@ -239,23 +289,32 @@ export default function TheLens() {
                                     </div>
                                 )}
 
-                                {/* Viewfinder */}
+                                {/* Viewfinder with scanning animation */}
                                 {cameraReady && !cameraError && (
                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                        <div className="w-56 h-56 relative">
-                                            <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-cyan-400 rounded-tl-lg" />
-                                            <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-cyan-400 rounded-tr-lg" />
-                                            <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-cyan-400 rounded-bl-lg" />
-                                            <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-cyan-400 rounded-br-lg" />
+                                        <div className="w-64 h-64 relative">
+                                            {/* Corner brackets */}
+                                            <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-cyan-400 rounded-tl-lg" />
+                                            <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-cyan-400 rounded-tr-lg" />
+                                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-cyan-400 rounded-bl-lg" />
+                                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-cyan-400 rounded-br-lg" />
+
+                                            {/* Scanning line */}
+                                            <motion.div
+                                                animate={{ y: [0, 240, 0] }}
+                                                transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+                                                className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent"
+                                            />
                                         </div>
                                     </div>
                                 )}
 
                                 {/* Status */}
-                                <div className="absolute bottom-28 left-0 right-0 text-center">
-                                    <p className="text-white/50 text-sm">
-                                        {cameraReady ? 'Tap capture to scan product' : 'Starting camera...'}
-                                    </p>
+                                <div className="absolute bottom-32 left-0 right-0 text-center">
+                                    <div className="inline-flex items-center gap-2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full">
+                                        <Scan size={14} className="text-cyan-400" />
+                                        <p className="text-white/70 text-sm">{scanStatus}</p>
+                                    </div>
                                 </div>
                             </motion.div>
                         ) : (
@@ -338,13 +397,14 @@ export default function TheLens() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="absolute inset-0 z-40 bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center"
+                        className="absolute inset-0 z-40 bg-black/85 backdrop-blur-xl flex flex-col items-center justify-center"
                     >
                         <div className="relative mb-6">
-                            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-cyan-500 to-green-500 blur-xl animate-pulse" />
-                            <Loader2 size={32} className="absolute inset-0 m-auto text-white animate-spin" />
+                            <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-cyan-500 to-green-500 blur-2xl animate-pulse" />
+                            <Loader2 size={36} className="absolute inset-0 m-auto text-white animate-spin" />
                         </div>
-                        <p className="text-white text-lg">Analyzing environmental impact...</p>
+                        <p className="text-white text-lg font-light">Analyzing impact...</p>
+                        <p className="text-white/40 text-sm mt-2">Fetching environmental data</p>
                     </motion.div>
                 )}
             </AnimatePresence>
