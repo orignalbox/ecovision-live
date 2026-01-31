@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { X, Droplets, Wind, AlertTriangle, Leaf, ChevronRight, Recycle, Package, Lightbulb, Star } from 'lucide-react';
+import { X, Droplets, Wind, AlertTriangle, Leaf, ChevronRight, Recycle, Package, Lightbulb, Star, Share2 } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
 
@@ -49,6 +49,40 @@ export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardP
 
     const ecoScoreColor = ecoScoreColors[data.ecoScore || ''] || 'text-gray-400 bg-gray-500/20 border-gray-500/40';
 
+    // Share functionality
+    const handleShare = async () => {
+        const ecoEmoji = data.ecoScore === 'A' ? '🌱' : data.ecoScore === 'B' ? '🍃' : data.ecoScore === 'C' ? '🌿' : '🌍';
+
+        const shareText = `${ecoEmoji} ${data.name}
+
+📊 Eco Score: ${data.ecoScore || '?'}/A
+🌫️ Carbon: ${data.co2} kg CO₂
+💧 Water: ${data.water}L
+♻️ Bio Index: ${data.bio}/100
+
+${data.redFlags && data.redFlags.length > 0 ? `⚠️ ${data.redFlags[0]}\n\n` : ''}Scanned with EcoVision - Know your impact! 🌎
+#EcoVision #Sustainability #EcoFriendly`;
+
+        const shareData = {
+            title: `EcoVision: ${data.name}`,
+            text: shareText,
+            url: 'https://ecovision.app'
+        };
+
+        try {
+            if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+                await navigator.share(shareData);
+            } else {
+                // Fallback: copy to clipboard
+                await navigator.clipboard.writeText(shareText);
+                alert('Copied to clipboard! 📋');
+            }
+        } catch (err) {
+            // User cancelled or error
+            console.log('Share cancelled');
+        }
+    };
+
     return (
         <motion.div
             initial={{ y: '100%' }}
@@ -78,13 +112,22 @@ export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardP
                             )}
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-colors flex-shrink-0"
-                        aria-label="Close"
-                    >
-                        <X size={22} className="text-white" />
-                    </button>
+                    <div className="flex gap-2 flex-shrink-0">
+                        <button
+                            onClick={handleShare}
+                            className="p-3 bg-life-green/20 rounded-full hover:bg-life-green/30 transition-colors"
+                            aria-label="Share"
+                        >
+                            <Share2 size={20} className="text-life-green" />
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
+                            aria-label="Close"
+                        >
+                            <X size={22} className="text-white" />
+                        </button>
+                    </div>
                 </div>
             </div>
 
