@@ -23,61 +23,56 @@ Return ONLY valid JSON with this structure:
 Be precise. If data is unknown, estimate based on category (e.g., Beef = high CO2, T-Shirt = high Water).
 `;
 
+// Helper to clean Gemini JSON
+function cleanGeminiJson(text: string): any {
+    try {
+        const cleaned = text.replace(/```json|```/g, '').trim();
+        return JSON.parse(cleaned);
+    } catch (e) {
+        console.error("JSON Parse Error:", e, "Raw Text:", text);
+        return { name: "Analysis Failed", error: "Could not parse AI response", alternatives: [], redFlags: [] };
+    }
+}
+
 export async function POST(req: Request) {
     try {
-        const { image, barcode, url } = await req.json();
+        const body = await req.json();
+        const { image, barcode, url } = body;
 
-        // 1. MOCK FALLBACK (If no API Key)
+        // 1. Validate API Key
         if (!process.env.GEMINI_API_KEY) {
-            console.warn("No API Key. Returning Demo Data.");
             return NextResponse.json({
-                name: "Demo Product (Set API Key)",
-                co2: 12.5,
-                water: 450,
-                bio: 60,
-                alternatives: [
-                    { name: "Bamboo Toothbrush", savings: "Plastic Free" },
-                    { name: "Refillable Glass Jar", savings: "Zero Waste" }
-                ],
-                redFlags: ["Mock Data used - Setup Env Var"]
+                name: "Demo Product (No API Key)",
+                co2: 10, water: 200, bio: 50,
+                alternatives: [{ name: "Set GEMINI_API_KEY", savings: "in Vercel" }],
+                redFlags: ["Missing API Key"]
             });
         }
 
-        // 2. BARCODE FLOW (Hybrid: OFF + AI)
+        // 2. Barcode Analysis (Text-Based)
         if (barcode) {
-            // A. Fetch Identity
             const offRes = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json`);
             const offData = await offRes.json();
+            const productName = offData.status === 1 ? offData.product.product_name : "Unknown Product";
 
-            let productName = "Unknown Product";
-            if (offData.status === 1) {
-                productName = offData.product.product_name;
-            }
-
-            // B. Ask AI for Impact & Swaps based on Name
-            const result = await model.generateContent([
-                SYSTEM_PROMPT,
-                `Analyze this product identified by barcode: "${productName}".`
-            ]);
-            const response = await result.response;
-            const json = JSON.parse(response.text().replace(/```json|```/g, '').trim());
+            const prompt = `Analyze this product: "${productName}". (Barcode: ${barcode}). Returns JSON with eco-impact.`;
+            const result = await model.generateContent([SYSTEM_PROMPT, prompt]);
+            const json = cleanGeminiJson(result.response.text());
             return NextResponse.json({ ...json, name: productName });
         }
 
-        // 3. URL FLOW (Text Analysis)
+        // 3. URL Analysis (Text-Based)
         if (url) {
-            const result = await model.generateContent([
-                SYSTEM_PROMPT,
-                `Analyze this e-commerce URL: "${url}". Infer the product and its impact.`
-            ]);
-            const text = await result.response.text();
-            const json = JSON.parse(text.replace(/```json|```/g, '').trim());
-            return NextResponse.json(json);
+            const prompt = `Analyze this product URL: "${url}". Infer the product and impact. Returns JSON.`;
+            const result = await model.generateContent([SYSTEM_PROMPT, prompt]);
+            return NextResponse.json(cleanGeminiJson(result.response.text()));
         }
 
-        // 4. IMAGE FLOW (Vision)
+        // 4. Image Analysis (Multimodal)
         if (image) {
-            const base64Data = image.split(',')[1] || image;
+            // Strict Base64 handling
+            const base64Data = image.includes('base64,') ? image.split('base64,')[1] : image;
+
             const result = await model.generateContent([
                 SYSTEM_PROMPT,
                 {
@@ -86,15 +81,19 @@ export async function POST(req: Request) {
                         mimeType: "image/jpeg",
                     },
                 },
+                { text: "Identify this product and its environmental impact." }
             ]);
-            const text = await result.response.text();
-            const json = JSON.parse(text.replace(/```json|```/g, '').trim());
-            return NextResponse.json(json);
+            return NextResponse.json(cleanGeminiJson(result.response.text()));
         }
 
-        return NextResponse.json({ error: "Invalid Input" }, { status: 400 });
+        return NextResponse.json({ error: "No valid input provided" }, { status: 400 });
+
     } catch (error) {
-        console.error("Analysis Error:", error);
-        return NextResponse.json({ error: "Failed to analyze image" }, { status: 500 });
+        console.error("Gemini API Error:", error);
+        return NextResponse.json({
+            name: "Error",
+            co2: 0, water: 0, bio: 0,
+            alternatives: [], redFlags: ["System Error"]
+        }, { status: 500 });
     }
 }
