@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+:root {
+  --background: #F5F7FA;
+  --foreground: #2D3436;
+}
+
+@theme inline {
+  --color-ozone-white: #F5F7FA;
+  --color-carbon-grey: #2D3436;
+  --color-chlorophyll-green: #00B894;
+  --color-warning-amber: #FDCB6E;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
