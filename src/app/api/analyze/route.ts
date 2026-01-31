@@ -2,13 +2,14 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
 import { NextResponse } from "next/server";
 
-// Initialize Gemini 2.0 Flash (Primary)
+// Initialize Gemini 2.5 Flash (Current stable - 2.0 deprecated March 2026)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 // Initialize Groq (Fallback) - Free tier with better limits
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
-const GROQ_VISION_MODEL = "llama-3.2-90b-vision-preview";
+const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const GROQ_TEXT_MODEL = "llama-3.3-70b-versatile";
 
 // Enhanced system prompt with recycling info
 const SYSTEM_PROMPT = `You are an expert environmental impact analyst. Analyze the provided input and return ONLY valid JSON (no markdown, no code blocks) with this exact structure:
@@ -128,7 +129,7 @@ async function analyzeWithGroq(prompt: string, imageBase64?: string): Promise<an
         }
 
         const completion = await groq.chat.completions.create({
-            model: imageBase64 ? GROQ_VISION_MODEL : "llama-3.3-70b-versatile",
+            model: imageBase64 ? GROQ_VISION_MODEL : GROQ_TEXT_MODEL,
             messages,
             temperature: 0.3,
             max_tokens: 2000
