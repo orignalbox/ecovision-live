@@ -1,9 +1,14 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 import { NextResponse } from "next/server";
 
-// Initialize Gemini 2.0 Flash (Stable)
+// Initialize Gemini 2.0 Flash (Primary)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+// Initialize Groq (Fallback) - Free tier with better limits
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
+const GROQ_VISION_MODEL = "llama-3.2-90b-vision-preview";
 
 // Enhanced system prompt with recycling info
 const SYSTEM_PROMPT = `You are an expert environmental impact analyst. Analyze the provided input and return ONLY valid JSON (no markdown, no code blocks) with this exact structure:
@@ -88,6 +93,53 @@ function getFallbackResponse(inputType: string, inputHint?: string): any {
             reuseIdeas: ["Consider donating or repurposing"]
         }
     };
+}
+
+// Groq fallback for image analysis
+async function analyzeWithGroq(prompt: string, imageBase64?: string): Promise<any> {
+    if (!process.env.GROQ_API_KEY) return null;
+
+    try {
+        const messages: any[] = [];
+
+        if (imageBase64) {
+            // Strip data URL prefix if present
+            const base64Data = imageBase64.includes("base64,")
+                ? imageBase64.split("base64,")[1]
+                : imageBase64;
+
+            messages.push({
+                role: "user",
+                content: [
+                    { type: "text", text: SYSTEM_PROMPT + "\n\n" + prompt },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:image/jpeg;base64,${base64Data}`
+                        }
+                    }
+                ]
+            });
+        } else {
+            messages.push({
+                role: "user",
+                content: SYSTEM_PROMPT + "\n\n" + prompt
+            });
+        }
+
+        const completion = await groq.chat.completions.create({
+            model: imageBase64 ? GROQ_VISION_MODEL : "llama-3.3-70b-versatile",
+            messages,
+            temperature: 0.3,
+            max_tokens: 2000
+        });
+
+        const text = completion.choices[0]?.message?.content || "";
+        return parseGeminiResponse(text);
+    } catch (error) {
+        console.error("Groq fallback error:", error);
+        return null;
+    }
 }
 
 // Fetch URL content with better extraction
@@ -187,7 +239,7 @@ Countries: ${p.countries || 'Unknown'}
                 console.warn("OpenFoodFacts error:", e);
             }
 
-            const result = await model.generateContent([
+            const result = await geminiModel.generateContent([
                 SYSTEM_PROMPT,
                 `Analyze this product's environmental impact:\n${productInfo}\n\nProvide specific eco-friendly alternatives and detailed recycling instructions.`
             ]);
@@ -207,7 +259,7 @@ Countries: ${p.countries || 'Unknown'}
 
             const pageContent = await fetchUrlContent(url);
 
-            const result = await model.generateContent([
+            const result = await geminiModel.generateContent([
                 SYSTEM_PROMPT,
                 `Analyze this product page and provide environmental impact data with SPECIFIC alternative products that are available online:\n\n${pageContent}`
             ]);
@@ -232,21 +284,39 @@ Countries: ${p.countries || 'Unknown'}
                 if (mimeMatch) mimeType = mimeMatch[1];
             }
 
-            const result = await model.generateContent([
-                SYSTEM_PROMPT,
-                {
-                    inlineData: {
-                        data: base64Data,
-                        mimeType: mimeType
-                    }
-                },
-                "Identify this product and analyze its environmental impact. Provide specific alternatives and detailed recycling/disposal instructions."
-            ]);
+            // Try Gemini first
+            try {
+                const result = await geminiModel.generateContent([
+                    SYSTEM_PROMPT,
+                    {
+                        inlineData: {
+                            data: base64Data,
+                            mimeType: mimeType
+                        }
+                    },
+                    "Identify this product and analyze its environmental impact. Provide specific alternatives and detailed recycling/disposal instructions."
+                ]);
 
-            const data = parseGeminiResponse(result.response.text());
-            if (!data) throw new Error("Failed to parse response");
+                const data = parseGeminiResponse(result.response.text());
+                if (data) {
+                    return NextResponse.json(data);
+                }
+            } catch (geminiError: any) {
+                console.log("Gemini failed, trying Groq fallback:", geminiError.message);
+            }
 
-            return NextResponse.json(data);
+            // Fallback to Groq
+            const groqData = await analyzeWithGroq(
+                "Identify this product and analyze its environmental impact. Provide specific alternatives and detailed recycling/disposal instructions.",
+                image
+            );
+
+            if (groqData) {
+                return NextResponse.json({ ...groqData, _provider: "groq" });
+            }
+
+            // If both fail, return fallback
+            return NextResponse.json(getFallbackResponse("image"));
         }
 
         return NextResponse.json({ error: "No input provided" }, { status: 400 });

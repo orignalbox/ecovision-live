@@ -21,6 +21,7 @@ export default function TheLens() {
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
     const [flashVisible, setFlashVisible] = useState(false);
+    const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
     const addLog = useStore((state) => state.addLog);
 
@@ -143,6 +144,7 @@ export default function TheLens() {
         ctx.drawImage(video, 0, 0);
         const imageData = canvas.toDataURL('image/jpeg', 0.85);
 
+        setCapturedImage(imageData);
         analyze({ image: imageData });
     }, [cameraReady, analyze]);
 
@@ -152,7 +154,11 @@ export default function TheLens() {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = () => analyze({ image: reader.result as string });
+        reader.onload = () => {
+            const imageData = reader.result as string;
+            setCapturedImage(imageData);
+            analyze({ image: imageData });
+        };
         reader.readAsDataURL(file);
         e.target.value = '';
     }, [analyze]);
@@ -359,7 +365,7 @@ export default function TheLens() {
 
             {/* Results */}
             <AnimatePresence>
-                {result && <ImpactCard data={result} onClose={handleClose} />}
+                {result && <ImpactCard data={result} onClose={handleClose} capturedImage={capturedImage || undefined} />}
             </AnimatePresence>
         </div>
     );

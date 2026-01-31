@@ -33,9 +33,10 @@ interface ImpactData {
 interface ImpactCardProps {
     data: ImpactData;
     onClose: () => void;
+    capturedImage?: string;
 }
 
-export default function ImpactCard({ data, onClose }: ImpactCardProps) {
+export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardProps) {
     const [activeTab, setActiveTab] = useState<'impact' | 'recycle' | 'alternatives'>('impact');
 
     const ecoScoreColors: Record<string, string> = {
@@ -122,6 +123,18 @@ export default function ImpactCard({ data, onClose }: ImpactCardProps) {
                         animate={{ opacity: 1, x: 0 }}
                         className="space-y-6"
                     >
+                        {/* Captured Image */}
+                        {capturedImage && (
+                            <div className="flex justify-center">
+                                <div className="w-24 h-24 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
+                                    <img
+                                        src={capturedImage}
+                                        alt={data.name}
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                            </div>
+                        )}
                         {/* Eco Score Circle */}
                         <div className="flex justify-center py-6">
                             <div className="relative w-40 h-40">
