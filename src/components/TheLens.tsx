@@ -289,7 +289,7 @@ export default function TheLens() {
                         )}
 
                         {/* Status Text */}
-                        <div className="absolute bottom-36 left-0 right-0 text-center">
+                        <div className="absolute bottom-52 left-0 right-0 text-center">
                             <p className="text-white/60 text-sm font-medium">
                                 {cameraReady ? 'Point at product & tap to capture' : 'Starting camera...'}
                             </p>
@@ -331,9 +331,9 @@ export default function TheLens() {
                 )}
             </AnimatePresence>
 
-            {/* Capture Button - Positioned ABOVE NavDock (bottom-6 + dock height ~64px = bottom-24) */}
+            {/* Capture Button - Well above NavDock */}
             {mode === 'scan' && (
-                <div className="absolute bottom-24 left-0 right-0 flex justify-center z-[55]">
+                <div className="absolute bottom-36 left-0 right-0 flex justify-center z-[55]">
                     <motion.button
                         onClick={handleCapture}
                         disabled={!cameraReady || isProcessing}

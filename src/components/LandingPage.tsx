@@ -10,7 +10,7 @@ export default function LandingPage() {
     };
 
     return (
-        <div className="min-h-screen bg-void-black text-white overflow-x-hidden">
+        <div className="bg-void-black text-white" style={{ minHeight: '100dvh' }}>
             {/* Hero Section */}
             <section className="relative min-h-screen flex flex-col items-center justify-center px-6 py-20">
                 {/* Background Effects */}
