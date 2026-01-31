@@ -1,10 +1,8 @@
 
-import CameraView from "@/components/CameraView";
+import MainLayout from "@/components/MainLayout";
 
 export default function Home() {
   return (
-    <main className="h-screen w-full bg-black">
-      <CameraView />
-    </main>
+    <MainLayout />
   );
 }
