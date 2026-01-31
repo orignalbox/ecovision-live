@@ -1,36 +1,42 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
+// Initialize Gemini with the LATEST model: Gemini 3 Flash Preview
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-// Using Gemini 1.5 Pro for "Perfect" reasoning and vision quality as requested
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
-// Prompt Helper
-const SYSTEM_PROMPT = `
-You are an environmental impact expert. Analyze the input (Product Name, Image, or URL contents).
-Return ONLY valid JSON with this structure:
+// System prompt for environmental analysis
+const SYSTEM_PROMPT = `You are an expert environmental analyst. Analyze the provided input and return ONLY valid JSON with this exact structure:
 {
-  "name": "Exact Product Name",
-  "co2": number (estimated kg CO2e footprint),
-  "water": number (estimated Liters water usage),
-  "bio": number (0-100 Biodiversity Safety Score, 100=Best),
+  "name": "Product Name",
+  "co2": <number in kg>,
+  "water": <number in liters>,
+  "bio": <number 0-100, higher is better for environment>,
   "alternatives": [
-    { "name": "Specific Eco Brand/Product", "savings": "e.g. Save 12kg CO2" },
-    { "name": "Generic Better Option", "savings": "e.g. Save 400L Water" }
+    {"name": "Eco Alternative 1", "savings": "Benefit description"},
+    {"name": "Eco Alternative 2", "savings": "Benefit description"}
   ],
-  "redFlags": ["Microplastics", "Palm Oil", "Non-recyclable"] (list strings of negative traits if any)
+  "redFlags": ["Issue 1", "Issue 2"]
 }
-Be precise. If data is unknown, estimate based on category (e.g., Beef = high CO2, T-Shirt = high Water).
-`;
 
-// Helper to clean Gemini JSON
-function cleanGeminiJson(text: string): any {
+Be accurate and helpful. Estimate values if not precisely known based on product category.`;
+
+// Helper to safely parse Gemini response
+function parseGeminiResponse(text: string) {
     try {
-        const cleaned = text.replace(/```json|```/g, '').trim();
+        // Remove markdown code blocks if present
+        const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         return JSON.parse(cleaned);
-    } catch (e) {
-        console.error("JSON Parse Error:", e, "Raw Text:", text);
-        return { name: "Analysis Failed", error: "Could not parse AI response", alternatives: [], redFlags: [] };
+    } catch (error) {
+        console.error("JSON Parse Error:", error);
+        return {
+            name: "Parse Error",
+            co2: 0,
+            water: 0,
+            bio: 50,
+            alternatives: [],
+            redFlags: ["Could not parse AI response"]
+        };
     }
 }
 
@@ -39,61 +45,103 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { image, barcode, url } = body;
 
-        // 1. Validate API Key
+        // Check for API key
         if (!process.env.GEMINI_API_KEY) {
+            console.warn("GEMINI_API_KEY not configured");
             return NextResponse.json({
-                name: "Demo Product (No API Key)",
-                co2: 10, water: 200, bio: 50,
-                alternatives: [{ name: "Set GEMINI_API_KEY", savings: "in Vercel" }],
-                redFlags: ["Missing API Key"]
+                name: "Demo Mode",
+                co2: 5.2,
+                water: 150,
+                bio: 65,
+                alternatives: [
+                    { name: "Set GEMINI_API_KEY in Vercel", savings: "Enable real analysis" }
+                ],
+                redFlags: ["API Key not configured"]
             });
         }
 
-        // 2. Barcode Analysis (Text-Based)
+        // === BARCODE ANALYSIS ===
         if (barcode) {
-            const offRes = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json`);
-            const offData = await offRes.json();
-            const productName = offData.status === 1 ? offData.product.product_name : "Unknown Product";
+            console.log("Analyzing barcode:", barcode);
 
-            const prompt = `Analyze this product: "${productName}". (Barcode: ${barcode}). Returns JSON with eco-impact.`;
-            const result = await model.generateContent([SYSTEM_PROMPT, prompt]);
-            const json = cleanGeminiJson(result.response.text());
-            return NextResponse.json({ ...json, name: productName });
+            // Lookup product name from OpenFoodFacts
+            let productName = "Unknown Product";
+            try {
+                const offResponse = await fetch(
+                    `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`
+                );
+                const offData = await offResponse.json();
+                if (offData.status === 1 && offData.product?.product_name) {
+                    productName = offData.product.product_name;
+                }
+            } catch (e) {
+                console.warn("OpenFoodFacts lookup failed:", e);
+            }
+
+            // Ask Gemini to analyze
+            const result = await model.generateContent([
+                SYSTEM_PROMPT,
+                `Analyze this product: "${productName}" (barcode: ${barcode}). Provide environmental impact data.`
+            ]);
+
+            const responseText = result.response.text();
+            const data = parseGeminiResponse(responseText);
+            return NextResponse.json({ ...data, name: productName || data.name });
         }
 
-        // 3. URL Analysis (Text-Based)
+        // === URL ANALYSIS ===
         if (url) {
-            const prompt = `Analyze this product URL: "${url}". Infer the product and impact. Returns JSON.`;
-            const result = await model.generateContent([SYSTEM_PROMPT, prompt]);
-            return NextResponse.json(cleanGeminiJson(result.response.text()));
+            console.log("Analyzing URL:", url);
+
+            const result = await model.generateContent([
+                SYSTEM_PROMPT,
+                `Analyze the product from this URL: "${url}". Infer the product type and provide environmental impact data.`
+            ]);
+
+            const responseText = result.response.text();
+            return NextResponse.json(parseGeminiResponse(responseText));
         }
 
-        // 4. Image Analysis (Multimodal)
+        // === IMAGE ANALYSIS ===
         if (image) {
-            // Strict Base64 handling
-            const base64Data = image.includes('base64,') ? image.split('base64,')[1] : image;
+            console.log("Analyzing image...");
+
+            // Extract base64 data (handle both raw and data URL formats)
+            let base64Data = image;
+            if (image.includes("base64,")) {
+                base64Data = image.split("base64,")[1];
+            }
 
             const result = await model.generateContent([
                 SYSTEM_PROMPT,
                 {
                     inlineData: {
                         data: base64Data,
-                        mimeType: "image/jpeg",
-                    },
+                        mimeType: "image/jpeg"
+                    }
                 },
-                { text: "Identify this product and its environmental impact." }
+                "Identify this product and analyze its environmental impact."
             ]);
-            return NextResponse.json(cleanGeminiJson(result.response.text()));
+
+            const responseText = result.response.text();
+            return NextResponse.json(parseGeminiResponse(responseText));
         }
 
-        return NextResponse.json({ error: "No valid input provided" }, { status: 400 });
+        // No valid input
+        return NextResponse.json(
+            { error: "No image, barcode, or URL provided" },
+            { status: 400 }
+        );
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Gemini API Error:", error);
         return NextResponse.json({
-            name: "Error",
-            co2: 0, water: 0, bio: 0,
-            alternatives: [], redFlags: ["System Error"]
+            name: "Analysis Error",
+            co2: 0,
+            water: 0,
+            bio: 0,
+            alternatives: [],
+            redFlags: [error.message || "API Error"]
         }, { status: 500 });
     }
 }
