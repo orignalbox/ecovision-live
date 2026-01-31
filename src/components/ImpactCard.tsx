@@ -1,24 +1,24 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { X, Droplets, Wind, AlertTriangle, Leaf, ChevronRight, Recycle, Package, Lightbulb, Star, Share2, ShoppingBag } from 'lucide-react';
+import { X, Droplets, Wind, AlertTriangle, Leaf, ChevronRight, Recycle, Package, Lightbulb, Star, Share2, ShoppingBag, Scale } from 'lucide-react';
 import { useState } from 'react';
 import clsx from 'clsx';
 
-interface RecyclingInfo {
+export interface RecyclingInfo {
     recyclable: boolean;
     materials: string[];
     howToDispose: string;
     reuseIdeas: string[];
 }
 
-interface Alternative {
+export interface Alternative {
     name: string;
     savings: string;
     reason?: string;
 }
 
-interface ImpactData {
+export interface ImpactData {
     name: string;
     category?: string;
     co2: number;
@@ -34,9 +34,10 @@ interface ImpactCardProps {
     data: ImpactData;
     onClose: () => void;
     capturedImage?: string;
+    onCompare?: (alternative: Alternative) => void;
 }
 
-export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardProps) {
+export default function ImpactCard({ data, onClose, capturedImage, onCompare }: ImpactCardProps) {
     const [activeTab, setActiveTab] = useState<'impact' | 'recycle' | 'alternatives'>('impact');
 
     const ecoScoreColors: Record<string, string> = {
@@ -214,6 +215,25 @@ ${data.redFlags && data.redFlags.length > 0 ? `⚠️ ${data.redFlags[0]}\n\n` :
                             </div>
                         </div>
 
+                        {/* Actionable Badges Row */}
+                        <div className="flex justify-center gap-3 flex-wrap px-4">
+                            {data.recycling?.recyclable && (
+                                <span className="bg-green-500/10 border border-green-500/20 text-green-400 px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5">
+                                    <Recycle size={12} /> Recyclable
+                                </span>
+                            )}
+                            {data.water < 100 && (
+                                <span className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5">
+                                    <Droplets size={12} /> Water Smart
+                                </span>
+                            )}
+                            {data.bio > 80 && (
+                                <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5">
+                                    <Leaf size={12} /> Planet Friendly
+                                </span>
+                            )}
+                        </div>
+
                         {/* Metrics Grid */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
@@ -290,15 +310,24 @@ ${data.redFlags && data.redFlags.length > 0 ? `⚠️ ${data.redFlags[0]}\n\n` :
                                             )}
                                         </div>
                                     </div>
-                                    <a
-                                        href={`https://www.google.com/search?q=${encodeURIComponent(alt.name + " eco friendly buy")}&tbm=shop`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="mt-4 flex items-center justify-center gap-2 w-full py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-semibold text-white/70 transition-colors"
-                                    >
-                                        <ShoppingBag size={14} />
-                                        Shop Now
-                                    </a>
+                                    <div className="flex gap-2 mt-4">
+                                        <a
+                                            href={`https://www.google.com/search?q=${encodeURIComponent(alt.name + " eco friendly buy")}&tbm=shop`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-semibold text-white/70 transition-colors"
+                                        >
+                                            <ShoppingBag size={14} />
+                                            Shop Now
+                                        </a>
+                                        <button
+                                            onClick={() => onCompare && onCompare(alt)}
+                                            className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-500/10 hover:bg-green-500/20 text-green-400 font-bold rounded-xl transition-colors text-xs border border-green-500/20"
+                                        >
+                                            <Scale size={14} />
+                                            Compare
+                                        </button>
+                                    </div>
                                 </motion.div>
                             ))
                         ) : (

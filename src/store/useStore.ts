@@ -12,14 +12,27 @@ export interface LogEntry {
     savings?: string; // e.g. "400L Water" if swapped
 }
 
+export interface DecisionLog {
+    id: string;
+    date: string;
+    originalItem: string;
+    chosenItem: string;
+    savedCo2: number;
+    savedWater: number;
+}
+
 interface AppState {
     logs: LogEntry[];
-    totalCo2: number;
+    decisions: DecisionLog[];
+    totalCo2: number; // Consumption footprint
     totalWater: number;
+    savedCo2: number; // Active savings from decisions
+    savedWater: number;
     totalScans: number;
     scanStreak: number;
     lastScanDate: string | null;
     addLog: (entry: Omit<LogEntry, 'id' | 'date'>) => void;
+    addDecision: (original: string, chosen: string, co2Delta: number, waterDelta: number) => void;
     reset: () => void;
 }
 
@@ -27,8 +40,11 @@ export const useStore = create<AppState>()(
     persist(
         (set) => ({
             logs: [],
+            decisions: [],
             totalCo2: 0,
             totalWater: 0,
+            savedCo2: 0,
+            savedWater: 0,
             totalScans: 0,
             scanStreak: 0,
             lastScanDate: null,
@@ -40,7 +56,6 @@ export const useStore = create<AppState>()(
                 let newStreak = state.scanStreak;
 
                 if (lastScan !== today) {
-                    // Check if consecutive day
                     const yesterday = new Date(now);
                     yesterday.setDate(yesterday.getDate() - 1);
 
@@ -49,7 +64,6 @@ export const useStore = create<AppState>()(
                     } else if (lastScan === null) {
                         newStreak = 1;
                     } else {
-                        // Broke streak (unless it was already today, handled by if check)
                         newStreak = 1;
                     }
                 }
@@ -63,10 +77,25 @@ export const useStore = create<AppState>()(
                     lastScanDate: now.toISOString()
                 };
             }),
+            addDecision: (original, chosen, co2Delta, waterDelta) => set((state) => ({
+                decisions: [{
+                    id: uuidv4(),
+                    date: new Date().toISOString(),
+                    originalItem: original,
+                    chosenItem: chosen,
+                    savedCo2: co2Delta,
+                    savedWater: waterDelta
+                }, ...state.decisions],
+                savedCo2: state.savedCo2 + co2Delta,
+                savedWater: state.savedWater + waterDelta
+            })),
             reset: () => set({
                 logs: [],
+                decisions: [],
                 totalCo2: 0,
                 totalWater: 0,
+                savedCo2: 0,
+                savedWater: 0,
                 totalScans: 0,
                 scanStreak: 0,
                 lastScanDate: null

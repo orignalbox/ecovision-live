@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, Link as LinkIcon, Loader2, ImagePlus, X, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
-import ImpactCard from './ImpactCard';
+import ImpactCard, { ImpactData, Alternative } from './ImpactCard';
+import ComparisonView from './ComparisonView';
 import { useStore } from '@/store/useStore';
 
 export default function TheLens() {
@@ -18,14 +19,15 @@ export default function TheLens() {
     const [urlInput, setUrlInput] = useState('');
     const [cameraReady, setCameraReady] = useState(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
-    const [result, setResult] = useState<any>(null);
+    const [result, setResult] = useState<ImpactData | null>(null);
+    const [comparingItem, setComparingItem] = useState<ImpactData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [flashVisible, setFlashVisible] = useState(false);
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
     const addLog = useStore((state) => state.addLog);
 
-    // Camera initialization
+    // ... (Camera initialization code remains exactly the same)
     const initCamera = useCallback(async () => {
         setCameraError(null);
         setCameraReady(false);
@@ -91,6 +93,33 @@ export default function TheLens() {
             }
         };
     }, [mode, initCamera]);
+
+    // Comparison Logic
+    const handleCompare = (alternative: Alternative) => {
+        if (!result) return;
+
+        // Parse savings string "Saves 2.5kg CO2, 100L Water"
+        let co2Saved = 0;
+        let waterSaved = 0;
+
+        const co2Match = alternative.savings.match(/(\d+(\.\d+)?)(\s?)kg/i);
+        if (co2Match) co2Saved = parseFloat(co2Match[1]);
+
+        const waterMatch = alternative.savings.match(/(\d+)(\s?)L/i);
+        if (waterMatch) waterSaved = parseFloat(waterMatch[1]);
+
+        // Construct synthetic impact data
+        const comparisonData: ImpactData = {
+            name: alternative.name,
+            co2: Math.max(0.1, parseFloat((result.co2 - co2Saved).toFixed(1))),
+            water: Math.max(0, result.water - waterSaved),
+            bio: Math.min(100, result.bio + 20), // Assume better bio score
+            ecoScore: 'A', // Alternatives are usually better
+            category: result.category
+        };
+
+        setComparingItem(comparisonData);
+    };
 
     // Analysis function
     const analyze = useCallback(async (payload: { image?: string; url?: string }) => {
@@ -174,6 +203,7 @@ export default function TheLens() {
     const handleClose = () => {
         setResult(null);
         setError(null);
+        setComparingItem(null);
     };
 
     return (
@@ -365,7 +395,22 @@ export default function TheLens() {
 
             {/* Results */}
             <AnimatePresence>
-                {result && <ImpactCard data={result} onClose={handleClose} capturedImage={capturedImage || undefined} />}
+                {result && !comparingItem && (
+                    <ImpactCard
+                        data={result}
+                        onClose={handleClose}
+                        capturedImage={capturedImage || undefined}
+                        onCompare={handleCompare}
+                    />
+                )}
+                {result && comparingItem && (
+                    <ComparisonView
+                        original={result}
+                        alternative={comparingItem}
+                        onClose={() => setComparingItem(null)} // Go back to single card
+                        onDecision={handleClose} // Close everything if made a decision
+                    />
+                )}
             </AnimatePresence>
         </div>
     );
