@@ -128,13 +128,18 @@ export default function ImpactCard({ data, onClose }: ImpactCardProps) {
                         <AlertTriangle size={16} className="text-alert-amber" />
                         Red Flags
                     </h3>
-                    <div className="flex gap-3 overflow-x-auto pb-2">
-                        <div className="bg-alert-amber/20 border border-alert-amber/30 px-4 py-2 rounded-full text-alert-amber text-sm font-bold whitespace-nowrap">
-                            ⚠️ Microplastics
-                        </div>
-                        <div className="bg-white/10 border border-white/10 px-4 py-2 rounded-full text-white/50 text-sm whitespace-nowrap">
-                            Palm Oil (Certified)
-                        </div>
+                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
+                        {data.redFlags && data.redFlags.length > 0 ? (
+                            data.redFlags.map((flag: string, i: number) => (
+                                <div key={i} className="bg-alert-amber/20 border border-alert-amber/30 px-4 py-2 rounded-full text-alert-amber text-sm font-bold whitespace-nowrap animate-pulse">
+                                    ⚠️ {flag}
+                                </div>
+                            ))
+                        ) : (
+                            <div className="bg-life-green/20 border border-life-green/30 px-4 py-2 rounded-full text-life-green text-sm font-bold whitespace-nowrap flex items-center gap-2">
+                                <Leaf size={12} /> No Major Concerns Detected
+                            </div>
+                        )}
                     </div>
                 </div>
 
