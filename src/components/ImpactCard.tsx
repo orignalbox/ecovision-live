@@ -76,36 +76,60 @@ export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardP
         if (!shareRef.current) return;
         setIsSharing(true);
         try {
-            // Wait a moment for images to load if needed
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Wait for images to load
+            await new Promise(resolve => setTimeout(resolve, 300));
 
-            const canvas = await html2canvas(shareRef.current, {
+            // Temporarily move element to be visible (html2canvas needs this)
+            const el = shareRef.current;
+            const originalStyle = el.style.cssText;
+            el.style.cssText = 'position: fixed; top: 0; left: 0; z-index: 9999; opacity: 0; pointer-events: none;';
+
+            const canvas = await html2canvas(el, {
                 useCORS: true,
-                scale: 2
+                allowTaint: true,
+                scale: 2,
+                logging: false,
+                width: 1080,
+                height: 1920,
             } as any);
 
-            canvas.toBlob(async (blob) => {
-                if (!blob) return;
+            // Restore original style
+            el.style.cssText = originalStyle;
 
-                // Try native share first
-                if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'impact.png', { type: 'image/png' })] })) {
-                    try {
-                        await navigator.share({
-                            files: [new File([blob], 'impact.png', { type: 'image/png' })],
-                            title: 'My EcoVision Impact',
-                            text: `Check out the true cost of ${data.name}!`
-                        });
-                    } catch (e) {
-                        // Fallback to download
-                        downloadBlob(blob);
-                    }
-                } else {
-                    // Fallback to download
-                    downloadBlob(blob);
-                }
-            }, 'image/png');
+            // Convert to blob with Promise wrapper
+            const blob = await new Promise<Blob | null>((resolve) => {
+                canvas.toBlob((b) => resolve(b), 'image/png', 1.0);
+            });
+
+            if (!blob) {
+                console.error('Failed to create blob');
+                return;
+            }
+
+            const file = new File([blob], 'ecovision-impact.png', { type: 'image/png' });
+
+            // Try native share
+            if (navigator.share && navigator.canShare?.({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: 'My EcoVision Impact',
+                    text: `Check out the true cost of ${data.name}!`
+                });
+            } else {
+                // Fallback to download
+                downloadBlob(blob);
+            }
         } catch (err) {
-            console.error('Sharing failed', err);
+            console.error('Sharing failed:', err);
+            // Still try to download on error
+            if (shareRef.current) {
+                try {
+                    const canvas = await html2canvas(shareRef.current, { scale: 1 } as any);
+                    canvas.toBlob((blob) => blob && downloadBlob(blob), 'image/png');
+                } catch {
+                    alert('Sharing not supported on this device');
+                }
+            }
         } finally {
             setIsSharing(false);
         }
@@ -124,8 +148,12 @@ export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardP
 
     return (
         <>
-            {/* Hidden capture area for sharing - Optimized for Instagram Story format */}
-            <div className="fixed left-[-9999px] top-0 w-[1080px] h-[1920px] bg-black text-white overflow-hidden font-sans" ref={shareRef}>
+            {/* Hidden capture area for sharing - Instagram Story format */}
+            <div
+                ref={shareRef}
+                className="fixed bg-black text-white overflow-hidden font-sans"
+                style={{ left: -9999, top: 0, width: 1080, height: 1920 }}
+            >
                 {capturedImage && (
                     <div className="absolute inset-0">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
