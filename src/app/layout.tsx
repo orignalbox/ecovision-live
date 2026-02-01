@@ -34,7 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={clsx(inter.className, "bg-ozone-white text-carbon-grey antialiased overflow-hidden")}>
+      <body className={clsx(inter.className, "bg-ozone-white text-carbon-grey antialiased")}>
         {children}
       </body>
     </html>
