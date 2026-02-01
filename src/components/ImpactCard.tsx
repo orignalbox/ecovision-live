@@ -311,45 +311,64 @@ export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardP
                         animate={{ opacity: 1 }}
                         className="space-y-6"
                     >
-                        {/* BIFL Section */}
-                        {biflMatch ? (
+                        {/* AI-Generated Alternatives (Primary) */}
+                        {data.alternatives && data.alternatives.length > 0 ? (
                             <div className="space-y-4">
+                                <h3 className="text-sm font-medium text-white/50 uppercase tracking-wider pl-1">AI Recommendations</h3>
+                                {data.alternatives.map((alt, i) => (
+                                    <div key={i} className="p-4 bg-green-500/10 border border-green-500/20 rounded-2xl">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <h3 className="font-bold text-white">{alt.name}</h3>
+                                            <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded font-bold">
+                                                {alt.savings}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-white/70">{alt.reason}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-6 text-white/40">
+                                <Leaf size={32} className="mx-auto mb-3 opacity-50" />
+                                <p>No alternatives suggested.</p>
+                                <p className="text-xs mt-1">This might already be a good choice!</p>
+                            </div>
+                        )}
+
+                        {/* BIFL Section (Secondary - Quality Upgrade) */}
+                        {biflMatch && (
+                            <div className="space-y-4 pt-4 border-t border-white/10">
                                 <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl">
                                     <div className="flex items-center gap-2 mb-2">
                                         <Award size={18} className="text-orange-400" />
-                                        <h3 className="text-sm font-bold text-orange-400 uppercase tracking-wider">True Cost Winner</h3>
+                                        <h3 className="text-sm font-bold text-orange-400 uppercase tracking-wider">Quality Upgrade</h3>
                                     </div>
-                                    <p className="text-sm text-white/70 mb-4">
-                                        Buying cheap {biflMatch.category.name.toLowerCase()} costs 3x more in the long run.
+                                    <p className="text-sm text-white/70 mb-3">
+                                        Invest once in quality {biflMatch.category.name.toLowerCase()} — lasts 10x longer.
                                     </p>
 
                                     {/* Cost Comparison */}
                                     {costAnalysis && (
-                                        <div className="flex items-center gap-2 text-xs bg-black/20 p-2 rounded-lg mb-4">
+                                        <div className="flex items-center gap-2 text-xs bg-black/20 p-2 rounded-lg">
                                             <div className="flex-1 text-center">
-                                                <div className="text-white/40 mb-1">Generic</div>
-                                                <div className="text-red-400 font-bold">₹{costAnalysis.generic.toFixed(1)}/use</div>
+                                                <div className="text-white/40 mb-1">Cheap</div>
+                                                <div className="text-red-400 font-bold">₹{costAnalysis.generic.toFixed(0)}/use</div>
                                             </div>
                                             <div className="text-white/20">vs</div>
                                             <div className="flex-1 text-center">
                                                 <div className="text-white/40 mb-1">Quality</div>
-                                                <div className="text-green-400 font-bold">₹{costAnalysis.bifl.toFixed(1)}/use</div>
+                                                <div className="text-green-400 font-bold">₹{costAnalysis.bifl.toFixed(0)}/use</div>
                                             </div>
                                         </div>
                                     )}
-
-                                    <div className="text-xs text-orange-200/50 mt-2 text-center">
-                                        You made a great choice! better than 90% of alternatives.
-                                    </div>
                                 </div>
 
-                                <h3 className="text-sm font-medium text-white/50 uppercase tracking-wider pl-1">Other BIFL Options</h3>
-                                <div className="space-y-3">
-                                    {biflMatch.products.map((prod, i) => (
-                                        <div key={i} className="p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl flex items-center justify-between group hover:border-white/20 transition-colors">
+                                <div className="space-y-2">
+                                    {biflMatch.products.slice(0, 2).map((prod, i) => (
+                                        <div key={i} className="p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl flex items-center justify-between">
                                             <div>
-                                                <div className="font-semibold text-white">{prod.name}</div>
-                                                <div className="text-xs text-white/40 mt-0.5">{prod.warranty || 'High durability'}</div>
+                                                <div className="font-semibold text-white text-sm">{prod.name}</div>
+                                                <div className="text-xs text-white/40">{prod.warranty || 'High durability'}</div>
                                             </div>
                                             <a
                                                 href={prod.links.official || prod.links.amazon || prod.links.flipkart || '#'}
@@ -357,34 +376,11 @@ export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardP
                                                 rel="noopener noreferrer"
                                                 className="p-2 bg-white/10 rounded-lg text-white/60 hover:text-white hover:bg-white/20 transition-colors"
                                             >
-                                                <ExternalLink size={16} />
+                                                <ExternalLink size={14} />
                                             </a>
                                         </div>
                                     ))}
                                 </div>
-                            </div>
-                        ) : (
-                            // Standard AI alternatives - Only show if NO BIFL match
-                            <div className="space-y-4">
-                                {data.alternatives && data.alternatives.length > 0 ? (
-                                    data.alternatives.map((alt, i) => (
-                                        <div key={i} className="p-4 bg-green-500/10 border border-green-500/20 rounded-2xl">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h3 className="font-bold text-white">{alt.name}</h3>
-                                                <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded font-bold">
-                                                    {alt.savings}
-                                                </span>
-                                            </div>
-                                            <p className="text-sm text-white/70">{alt.reason}</p>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-10 text-white/40">
-                                        <Leaf size={32} className="mx-auto mb-3 opacity-50" />
-                                        <p>No better alternatives found.</p>
-                                        <p className="text-xs mt-1">This might already be a good choice!</p>
-                                    </div>
-                                )}
                             </div>
                         )}
                     </motion.div>
