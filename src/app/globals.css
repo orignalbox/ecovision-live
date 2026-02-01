@@ -119,6 +119,37 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "rlig" 1, "calt" 1;
+  padding-bottom: env(safe-area-inset-bottom);
+  /* Fix for iPhone home bar overlap */
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Utility for safe area spacing */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Fix mobile scroll bounce/behavior */
+html {
+  overscroll-behavior-y: none;
 }
 
 /* Typography - Premium type scale */

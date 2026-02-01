@@ -8,8 +8,9 @@ export interface LogEntry {
     name: string;
     co2: number;
     water: number;
-    date: string;
+    scannedAt: string; // date
     savings?: string; // e.g. "400L Water" if swapped
+    ecoScore?: string;
 }
 
 export interface DecisionLog {
@@ -31,7 +32,7 @@ interface AppState {
     totalScans: number;
     scanStreak: number;
     lastScanDate: string | null;
-    addLog: (entry: Omit<LogEntry, 'id' | 'date'>) => void;
+    addLog: (entry: Omit<LogEntry, 'id' | 'scannedAt'>) => void;
     addDecision: (original: string, chosen: string, co2Delta: number, waterDelta: number) => void;
     reset: () => void;
 }
@@ -69,7 +70,7 @@ export const useStore = create<AppState>()(
                 }
 
                 return {
-                    logs: [{ ...entry, id: uuidv4(), date: now.toISOString() }, ...state.logs],
+                    logs: [{ ...entry, id: uuidv4(), scannedAt: now.toISOString() }, ...state.logs],
                     totalCo2: state.totalCo2 + entry.co2,
                     totalWater: state.totalWater + entry.water,
                     totalScans: state.totalScans + 1,
