@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, LayoutDashboard, MapPinned, Home, Leaf } from 'lucide-react';
+import { Camera, LayoutDashboard, MapPinned, Home, Leaf, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import clsx from 'clsx';
 import TheLens from '@/components/TheLens';
@@ -59,10 +59,20 @@ export default function MainLayout() {
                 </nav>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-white/10">
+                <div className="p-4 border-t border-white/10 space-y-2">
+                    <Link
+                        href="/track"
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-green-400 bg-green-500/10 hover:bg-green-500/20 transition-colors"
+                    >
+                        <TrendingUp size={20} />
+                        <div>
+                            <span className="font-medium">Track & Compare</span>
+                            <p className="text-xs text-green-400/60">Save money tools</p>
+                        </div>
+                    </Link>
                     <Link
                         href="/"
-                        className="flex items-center gap-2 text-white/40 hover:text-white text-sm transition-colors"
+                        className="flex items-center gap-2 text-white/40 hover:text-white text-sm transition-colors px-4 py-2"
                     >
                         <Home size={16} />
                         <span>Back to Home</span>

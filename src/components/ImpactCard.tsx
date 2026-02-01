@@ -1,9 +1,10 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { X, Droplets, Wind, AlertTriangle, Leaf, ChevronRight, Recycle, Package, Lightbulb, Star, Share2, ShoppingBag, Scale } from 'lucide-react';
-import { useState } from 'react';
+import { X, Droplets, Wind, AlertTriangle, Leaf, ChevronRight, Recycle, Package, Lightbulb, Star, Share2, ShoppingBag, Scale, ExternalLink, Award } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import clsx from 'clsx';
+import { matchProductToCategory, calculateCostPerUse, type BIFLProduct } from '@/lib/bifl';
 
 export interface RecyclingInfo {
     recyclable: boolean;
@@ -49,6 +50,11 @@ export default function ImpactCard({ data, onClose, capturedImage, onCompare }: 
     };
 
     const ecoScoreColor = ecoScoreColors[data.ecoScore || ''] || 'text-gray-400 bg-gray-500/20 border-gray-500/40';
+
+    // Match scanned product to BIFL category for quality recommendations
+    const biflMatch = useMemo(() => {
+        return matchProductToCategory(data.name, data.category);
+    }, [data.name, data.category]);
 
     // Trigger confetti for 'A' score
     useState(() => {
@@ -289,7 +295,7 @@ ${data.redFlags && data.redFlags.length > 0 ? `⚠️ ${data.redFlags[0]}\n\n` :
                             🌱 Better choices for the planet
                         </p>
 
-                        {data.alternatives && data.alternatives.length > 0 ? (
+                        {data.alternatives && data.alternatives.length > 0 && (
                             data.alternatives.map((alt, i) => (
                                 <motion.div
                                     key={i}
@@ -330,7 +336,102 @@ ${data.redFlags && data.redFlags.length > 0 ? `⚠️ ${data.redFlags[0]}\n\n` :
                                     </div>
                                 </motion.div>
                             ))
-                        ) : (
+                        )}
+
+                        {/* BIFL Products Section */}
+                        {biflMatch && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2 }}
+                                className="mt-6"
+                            >
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Award size={18} className="text-pink-400" />
+                                    <h3 className="text-white font-semibold">Buy It For Life</h3>
+                                    <span className="text-xs bg-pink-500/10 text-pink-400 px-2 py-0.5 rounded-md">
+                                        {biflMatch.category.icon} {biflMatch.category.name}
+                                    </span>
+                                </div>
+                                <p className="text-white/40 text-xs mb-4">
+                                    Quality products that save money long-term
+                                </p>
+                                <div className="space-y-3">
+                                    {biflMatch.products.map((product, i) => {
+                                        const costPerUse = calculateCostPerUse(product.price, product.lifespanYears, product.usesPerWeek);
+                                        return (
+                                            <motion.div
+                                                key={product.id}
+                                                initial={{ opacity: 0, x: -10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: 0.3 + i * 0.1 }}
+                                                className="bg-gradient-to-r from-pink-500/10 to-transparent p-4 rounded-xl border border-pink-500/20"
+                                            >
+                                                <div className="flex items-start justify-between gap-3 mb-2">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                            <span className="text-white font-semibold text-sm">{product.brand}</span>
+                                                            <span className="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-md">
+                                                                {product.warranty}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-white/60 text-xs truncate">{product.name}</p>
+                                                    </div>
+                                                    <div className="text-right flex-shrink-0">
+                                                        <div className="text-white font-bold">₹{product.price.toLocaleString()}</div>
+                                                        <div className="text-pink-400 text-xs font-medium">₹{costPerUse.toFixed(2)}/use</div>
+                                                    </div>
+                                                </div>
+                                                <p className="text-white/40 text-xs mb-3 leading-relaxed">{product.whyBIFL}</p>
+                                                <div className="flex gap-2 flex-wrap">
+                                                    {product.links.amazon && (
+                                                        <a
+                                                            href={product.links.amazon}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-1.5 text-xs bg-white/5 text-white/60 px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
+                                                        >
+                                                            Amazon <ExternalLink size={10} />
+                                                        </a>
+                                                    )}
+                                                    {product.links.flipkart && (
+                                                        <a
+                                                            href={product.links.flipkart}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-1.5 text-xs bg-white/5 text-white/60 px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
+                                                        >
+                                                            Flipkart <ExternalLink size={10} />
+                                                        </a>
+                                                    )}
+                                                    {product.links.official && (
+                                                        <a
+                                                            href={product.links.official}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-1.5 text-xs bg-white/5 text-white/60 px-3 py-2 rounded-lg hover:bg-white/10 transition-colors"
+                                                        >
+                                                            Official <ExternalLink size={10} />
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
+                                {biflMatch.category.budgetOption && (
+                                    <div className="mt-4 p-3 bg-green-500/5 border border-green-500/15 rounded-xl">
+                                        <p className="text-xs text-green-400/80">
+                                            <span className="font-medium">💡 vs. ₹{biflMatch.category.budgetOption.price} budget option:</span>{' '}
+                                            Lasts {biflMatch.category.budgetOption.lifespanYears}× shorter. Quality saves money over 5+ years.
+                                        </p>
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
+
+                        {/* Empty state only if no alternatives AND no BIFL match */}
+                        {(!data.alternatives || data.alternatives.length === 0) && !biflMatch && (
                             <div className="text-center py-12 text-white/30">
                                 <Leaf size={40} className="mx-auto mb-4 opacity-50" />
                                 <p>No alternatives found</p>

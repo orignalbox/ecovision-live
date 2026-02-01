@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Camera, LayoutDashboard, MapPinned, Home, Settings } from 'lucide-react';
+import { Camera, LayoutDashboard, MapPinned, Home, TrendingUp } from 'lucide-react';
 import clsx from 'clsx';
 import Link from 'next/link';
 
@@ -67,7 +67,19 @@ export default function NavDock({ activeTab, onTabChange }: NavDockProps) {
                         </button>
                     );
                 })}
+
+                <div className="w-px h-8 bg-white/10 mx-1" />
+
+                {/* Track link - new comparison tools */}
+                <Link
+                    href="/track"
+                    className="relative w-12 h-12 flex items-center justify-center rounded-full transition-all hover:bg-green-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500/50"
+                    aria-label="Track & Compare"
+                >
+                    <TrendingUp size={20} className="text-green-400 hover:text-green-300 transition-colors" />
+                </Link>
             </nav>
         </div>
     );
 }
+
