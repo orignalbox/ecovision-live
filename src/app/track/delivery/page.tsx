@@ -1,368 +1,243 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Bike, Clock, MapPin, Flame, TrendingDown, Package, Heart, Leaf, AlertCircle } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Bike, MapPin, TrendingDown, Clock, Package, Wallet, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
-import LocationInput from '@/components/LocationInput';
-import { calculateDistance, estimateTravelTime, type Coordinates } from '@/lib/location';
-import { calculateDeliveryEmissions, calculateCaloriesBurned } from '@/lib/emissions';
-import { DELIVERY_CHARGES } from '@/lib/pricing';
 
-interface PickupOption {
-    id: string;
-    name: string;
-    icon: React.ReactNode;
-    cost: number;
-    time: number;
-    co2: number;
-    calories: number;
-    quality: string;
-    qualityNote?: string;
-    highlight?: 'recommended' | 'healthiest' | 'fastest';
-}
+// Delivery cost data for India
+const DELIVERY_DATA = {
+    swiggy: { baseFee: 35, perKm: 5, platformFee: 5, surgePeak: 1.5 },
+    zomato: { baseFee: 30, perKm: 5, platformFee: 4, surgePeak: 1.4 },
+    blinkit: { baseFee: 25, perKm: 4, platformFee: 3, surgePeak: 1.3 },
+};
+
+// Fuel cost for self-pickup
+const FUEL_COST_PER_KM = 5; // ₹5/km for two-wheeler
+const TIME_PER_KM = 3; // minutes per km in city
 
 export default function DeliveryPage() {
-    const [home, setHome] = useState<{ coords: Coordinates | null; name: string }>({ coords: null, name: '' });
-    const [restaurant, setRestaurant] = useState<{ coords: Coordinates | null; name: string }>({ coords: null, name: '' });
-    const [manualDistance, setManualDistance] = useState<number | null>(null);
+    const [distance, setDistance] = useState(3);
+    const [orderValue, setOrderValue] = useState(300);
+    const [isPeakHour, setIsPeakHour] = useState(false);
 
-    const handleHomeChange = useCallback((coords: Coordinates | null, name: string) => {
-        setHome({ coords, name });
-        setManualDistance(null);
-    }, []);
+    // Calculate costs
+    const costs = useMemo(() => {
+        const surge = isPeakHour ? 1.4 : 1;
 
-    const handleRestaurantChange = useCallback((coords: Coordinates | null, name: string) => {
-        setRestaurant({ coords, name });
-        setManualDistance(null);
-    }, []);
+        // Delivery cost breakdown
+        const deliveryFee = Math.round((DELIVERY_DATA.swiggy.baseFee + distance * DELIVERY_DATA.swiggy.perKm) * surge);
+        const platformFee = DELIVERY_DATA.swiggy.platformFee;
+        const packingCharges = 15;
+        const totalDelivery = deliveryFee + platformFee + packingCharges;
 
-    // Calculate distance
-    const distance = useMemo(() => {
-        if (manualDistance !== null) return manualDistance;
-        if (home.coords && restaurant.coords) {
-            return calculateDistance(home.coords, restaurant.coords);
-        }
-        return 0;
-    }, [home.coords, restaurant.coords, manualDistance]);
+        // Pickup cost (fuel for round trip)
+        const pickupFuel = Math.round(distance * 2 * FUEL_COST_PER_KM);
+        const pickupTime = Math.round(distance * 2 * TIME_PER_KM);
 
-    // Delivery charges breakdown
-    const deliveryCharges = useMemo(() => {
-        const base = DELIVERY_CHARGES.delivery_fee.average;
-        const packaging = DELIVERY_CHARGES.packaging_charge.average;
-        const platform = DELIVERY_CHARGES.platform_fee.average;
-        const surge = distance > 5 ? Math.round(distance * 3) : 0; // Surge for far restaurants
+        // Savings
+        const savings = totalDelivery - pickupFuel;
+
         return {
-            delivery: base + surge,
-            packaging,
-            platform,
-            total: base + packaging + platform + surge,
+            deliveryFee,
+            platformFee,
+            packingCharges,
+            totalDelivery,
+            pickupFuel,
+            pickupTime,
+            savings
         };
-    }, [distance]);
+    }, [distance, isPeakHour]);
 
-    // Build options
-    const options = useMemo((): PickupOption[] => {
-        if (distance === 0) return [];
-
-        const emissions = calculateDeliveryEmissions(distance);
-        const roundTrip = distance * 2;
-
-        return [
-            {
-                id: 'delivery',
-                name: 'Get Delivered',
-                icon: <Package size={20} />,
-                cost: deliveryCharges.total,
-                time: 35 + Math.round(distance * 3), // More realistic delivery time
-                co2: Math.round(emissions.delivery),
-                calories: 0,
-                quality: 'Convenient',
-                qualityNote: 'May arrive lukewarm after 20+ min transit',
-            },
-            {
-                id: 'pickup-drive',
-                name: 'Pick Up (Drive)',
-                icon: <span className="text-lg">🚗</span>,
-                cost: Math.round(roundTrip * 8), // Fuel cost estimate
-                time: estimateTravelTime(roundTrip, 'car'),
-                co2: Math.round(emissions.pickupCar),
-                calories: 0,
-                quality: 'Fresh & Hot',
-                qualityNote: 'Get it straight from the kitchen',
-                highlight: 'fastest',
-            },
-            {
-                id: 'pickup-cycle',
-                name: 'Pick Up (Cycle)',
-                icon: <span className="text-lg">🚴</span>,
-                cost: 0,
-                time: estimateTravelTime(roundTrip, 'cycle'),
-                co2: 0,
-                calories: Math.round(calculateCaloriesBurned('cycling', roundTrip)),
-                quality: 'Fresh + Workout',
-                qualityNote: `Burn ${Math.round(calculateCaloriesBurned('cycling', roundTrip))} calories while you're at it`,
-                highlight: 'healthiest',
-            },
-            {
-                id: 'pickup-walk',
-                name: 'Pick Up (Walk)',
-                icon: <span className="text-lg">🚶</span>,
-                cost: 0,
-                time: estimateTravelTime(roundTrip, 'walk'),
-                co2: 0,
-                calories: Math.round(calculateCaloriesBurned('walking', roundTrip)),
-                quality: 'Fresh + Exercise',
-                qualityNote: distance <= 1.5 ? 'Perfect for a short walk' : 'Long walk, bring headphones!',
-                highlight: distance <= 1.5 ? 'recommended' : undefined,
-            },
-        ];
-    }, [distance, deliveryCharges]);
-
-    const hasLocations = distance > 0;
-    const savings = deliveryCharges.total;
+    // Is pickup worth it?
+    const pickupWorthIt = costs.savings > 20 && costs.pickupTime < 25;
 
     return (
-        <div className="min-h-screen bg-[#0A0A0B] text-white">
+        <div className="min-h-screen bg-[#0A0A0B] text-white pb-24">
             {/* Header */}
-            <header className="px-6 pt-8 pb-2">
+            <header className="px-6 pt-8 pb-4">
                 <Link
                     href="/track"
-                    className="inline-flex items-center gap-2 text-white/40 hover:text-white mb-6 text-sm font-medium transition-colors"
+                    className="inline-flex items-center gap-2 text-white/40 hover:text-white mb-5 text-sm font-medium transition-colors"
                 >
                     <ArrowLeft size={16} />
                     Back
                 </Link>
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center">
                         <Bike size={20} className="text-orange-400" />
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">Delivery vs Pickup</h1>
-                        <p className="text-white/40 text-sm">Is that convenience really worth ₹{deliveryCharges.total}?</p>
+                        <p className="text-white/40 text-sm">See the hidden fees</p>
                     </div>
                 </div>
             </header>
 
-            {/* Location Inputs */}
-            <div className="px-6 py-6 space-y-4">
-                <LocationInput
-                    label="Your Location"
-                    placeholder="Home, office, etc."
-                    useCurrentLocation={true}
-                    onLocationChange={handleHomeChange}
-                    accentColor="blue"
-                />
-
-                <LocationInput
-                    label="Restaurant"
-                    placeholder="Search restaurant or area..."
-                    onLocationChange={handleRestaurantChange}
-                    accentColor="orange"
-                />
-
-                {/* Manual distance fallback */}
-                {!hasLocations && (
-                    <div className="pt-2">
-                        <div className="text-center text-white/30 text-xs mb-3">or enter distance manually</div>
-                        <div className="flex items-center gap-3">
+            {/* Inputs */}
+            <div className="px-6 py-4 space-y-4">
+                {/* Distance */}
+                <div className="bg-[#111113] border border-white/[0.08] rounded-2xl p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <MapPin size={16} className="text-orange-400" />
+                            <span className="text-white/60 text-sm font-medium">Restaurant Distance</span>
+                        </div>
+                        <div className="flex items-center gap-1">
                             <input
-                                type="range"
+                                type="number"
                                 min={0.5}
-                                max={10}
+                                max={15}
                                 step={0.5}
-                                value={manualDistance ?? 2.5}
-                                onChange={(e) => setManualDistance(Number(e.target.value))}
-                                className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer
-                  [&::-webkit-slider-thumb]:appearance-none
-                  [&::-webkit-slider-thumb]:w-4
-                  [&::-webkit-slider-thumb]:h-4
-                  [&::-webkit-slider-thumb]:rounded-full
-                  [&::-webkit-slider-thumb]:bg-orange-500
-                  [&::-webkit-slider-thumb]:shadow-lg
-                  [&::-webkit-slider-thumb]:cursor-pointer"
+                                value={distance}
+                                onChange={(e) => setDistance(Math.max(0.5, Number(e.target.value) || 0.5))}
+                                className="w-12 bg-transparent text-right text-xl font-bold text-white outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
-                            <div className="text-lg font-semibold text-white min-w-[60px] text-right tabular-nums">
-                                {(manualDistance ?? 2.5).toFixed(1)} <span className="text-sm font-normal text-white/40">km</span>
-                            </div>
+                            <span className="text-white/40 text-lg">km</span>
                         </div>
                     </div>
-                )}
+                    <input
+                        type="range"
+                        min={0.5}
+                        max={10}
+                        step={0.5}
+                        value={Math.min(distance, 10)}
+                        onChange={(e) => setDistance(Number(e.target.value))}
+                        className="w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer
+                            [&::-webkit-slider-thumb]:appearance-none
+                            [&::-webkit-slider-thumb]:w-5
+                            [&::-webkit-slider-thumb]:h-5
+                            [&::-webkit-slider-thumb]:rounded-full
+                            [&::-webkit-slider-thumb]:bg-orange-500
+                            [&::-webkit-slider-thumb]:cursor-pointer"
+                    />
+                </div>
+
+                {/* Peak Hour Toggle */}
+                <div className="bg-[#111113] border border-white/[0.08] rounded-2xl p-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Clock size={16} className="text-yellow-400" />
+                            <span className="text-white/80 text-sm font-medium">Peak Hour (12-2pm, 7-10pm)</span>
+                        </div>
+                        <button
+                            onClick={() => setIsPeakHour(!isPeakHour)}
+                            className={`w-12 h-7 rounded-full transition-colors ${isPeakHour ? 'bg-yellow-500' : 'bg-white/10'
+                                }`}
+                        >
+                            <div className={`w-5 h-5 bg-white rounded-full transition-transform mx-1 ${isPeakHour ? 'translate-x-5' : ''
+                                }`} />
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            {/* Content */}
-            <AnimatePresence mode="wait">
-                {(hasLocations || manualDistance !== null) && options.length > 0 && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="px-6 pb-8"
-                    >
-                        {/* The Real Cost */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="mb-6"
-                        >
-                            <div className="p-5 bg-red-500/5 border border-red-500/20 rounded-2xl">
-                                <div className="flex items-center gap-2 text-red-400 text-xs font-medium uppercase tracking-wider mb-3">
-                                    <AlertCircle size={14} />
-                                    What delivery really costs
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="space-y-1 text-sm">
-                                        <div className="flex justify-between gap-8">
-                                            <span className="text-white/50">Delivery fee</span>
-                                            <span className="text-white tabular-nums">₹{deliveryCharges.delivery}</span>
-                                        </div>
-                                        <div className="flex justify-between gap-8">
-                                            <span className="text-white/50">Packaging</span>
-                                            <span className="text-white tabular-nums">₹{deliveryCharges.packaging}</span>
-                                        </div>
-                                        <div className="flex justify-between gap-8">
-                                            <span className="text-white/50">Platform fee</span>
-                                            <span className="text-white tabular-nums">₹{deliveryCharges.platform}</span>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-3xl font-bold text-red-400 tabular-nums">
-                                            ₹{deliveryCharges.total}
-                                        </div>
-                                        <div className="text-xs text-white/40">extra per order</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-
-                        {/* If pickup saves money, highlight it */}
-                        {savings > 20 && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.1 }}
-                                className="mb-6 p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/20 rounded-2xl"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center">
-                                        <TrendingDown size={20} className="text-green-400" />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-green-400/80">Pickup saves you</p>
-                                        <p className="text-2xl font-bold text-green-400 tracking-tight tabular-nums">
-                                            ₹{savings}/order
-                                        </p>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {/* Options */}
-                        <div className="space-y-3">
-                            {options.map((option, index) => (
-                                <motion.div
-                                    key={option.id}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: index * 0.05 }}
-                                    className={`
-                    relative overflow-hidden p-4 rounded-2xl border transition-all
-                    ${option.id === 'delivery'
-                                            ? 'bg-red-500/5 border-red-500/20'
-                                            : option.highlight === 'healthiest'
-                                                ? 'bg-green-500/5 border-green-500/30'
-                                                : option.highlight === 'recommended'
-                                                    ? 'bg-blue-500/5 border-blue-500/30'
-                                                    : 'bg-white/[0.02] border-white/10 hover:border-white/20'
-                                        }
-                  `}
-                                >
-                                    {/* Highlight Badge */}
-                                    {option.highlight && (
-                                        <div className={`
-                      absolute top-3 right-3 text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-md
-                      ${option.highlight === 'recommended' ? 'bg-blue-500/20 text-blue-400' : ''}
-                      ${option.highlight === 'healthiest' ? 'bg-green-500/20 text-green-400' : ''}
-                      ${option.highlight === 'fastest' ? 'bg-purple-500/20 text-purple-400' : ''}
-                    `}>
-                                            {option.highlight}
-                                        </div>
-                                    )}
-
-                                    <div className="flex items-start gap-4">
-                                        {/* Icon */}
-                                        <div className={`
-                      w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0
-                      ${option.id === 'delivery' ? 'bg-red-500/10' : 'bg-white/5'}
-                    `}>
-                                            {option.icon}
-                                        </div>
-
-                                        {/* Content */}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <h3 className="font-semibold text-white">{option.name}</h3>
-                                                <span className={`
-                          text-xl font-bold tabular-nums
-                          ${option.cost === 0 ? 'text-green-400' : option.id === 'delivery' ? 'text-red-400' : 'text-white'}
-                        `}>
-                                                    {option.cost === 0 ? 'Free' : `₹${option.cost}`}
-                                                </span>
-                                            </div>
-
-                                            <p className="text-xs text-white/40 mb-3">{option.qualityNote}</p>
-
-                                            {/* Stats Row */}
-                                            <div className="flex items-center gap-4 text-xs">
-                                                <div className="flex items-center gap-1.5 text-white/50">
-                                                    <Clock size={12} />
-                                                    <span>{option.time} min</span>
-                                                </div>
-                                                {option.calories > 0 && (
-                                                    <div className="flex items-center gap-1.5 text-orange-400">
-                                                        <Flame size={12} />
-                                                        <span>{option.calories} cal</span>
-                                                    </div>
-                                                )}
-                                                <div className={`flex items-center gap-1.5 ${option.quality.includes('Fresh') ? 'text-green-400' : 'text-white/30'}`}>
-                                                    <Heart size={12} />
-                                                    <span>{option.quality}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            ))}
+            {/* Comparison Cards */}
+            <div className="px-6 space-y-4">
+                {/* Delivery Cost */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-[#111113] border border-white/[0.08] rounded-2xl p-5"
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <Package size={18} className="text-red-400" />
+                            <h3 className="text-white font-semibold">Delivery</h3>
                         </div>
+                        <div className="text-2xl font-bold text-red-400">₹{costs.totalDelivery}</div>
+                    </div>
 
-                        {/* Monthly Impact */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3 }}
-                            className="mt-6 p-4 bg-white/[0.02] border border-white/10 rounded-2xl"
-                        >
-                            <p className="text-sm text-white/60">
-                                <span className="font-semibold text-white">If you order 10×/month:</span> Pickup saves <span className="text-green-400 font-semibold">₹{savings * 10}/month</span>
-                            </p>
-                            <p className="text-xs text-white/30 mt-1">
-                                That's ₹{savings * 120}/year — enough for a nice dinner out
-                            </p>
-                        </motion.div>
+                    {/* Fee breakdown */}
+                    <div className="space-y-2 pt-3 border-t border-white/5">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-white/40">Delivery fee</span>
+                            <span className="text-white/70">₹{costs.deliveryFee}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-white/40">Platform fee</span>
+                            <span className="text-white/70">₹{costs.platformFee}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-white/40">Packing charges</span>
+                            <span className="text-white/70">₹{costs.packingCharges}</span>
+                        </div>
+                    </div>
+
+                    {isPeakHour && (
+                        <div className="flex items-center gap-2 mt-3 p-2 bg-yellow-500/10 rounded-lg">
+                            <AlertTriangle size={14} className="text-yellow-400" />
+                            <span className="text-xs text-yellow-400">Peak hour surge applied</span>
+                        </div>
+                    )}
+                </motion.div>
+
+                {/* Pickup Cost */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className={`rounded-2xl p-5 border ${pickupWorthIt
+                            ? 'bg-green-500/5 border-green-500/30'
+                            : 'bg-[#111113] border-white/[0.08]'
+                        }`}
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <Bike size={18} className="text-green-400" />
+                            <h3 className="text-white font-semibold">Self Pickup</h3>
+                            {pickupWorthIt && (
+                                <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-[10px] uppercase font-bold rounded">
+                                    Recommended
+                                </span>
+                            )}
+                        </div>
+                        <div className="text-2xl font-bold text-green-400">₹{costs.pickupFuel}</div>
+                    </div>
+
+                    <div className="space-y-2 pt-3 border-t border-white/5">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-white/40">Fuel cost (round trip)</span>
+                            <span className="text-white/70">₹{costs.pickupFuel}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-white/40">Time (round trip)</span>
+                            <span className="text-white/70">{costs.pickupTime} min</span>
+                        </div>
+                    </div>
+                </motion.div>
+
+                {/* Savings Summary */}
+                {costs.savings > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="p-4 bg-gradient-to-r from-green-500/10 to-emerald-500/5 border border-green-500/20 rounded-xl"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+                                <Wallet size={20} className="text-green-400" />
+                            </div>
+                            <div>
+                                <p className="text-xs text-green-400/70">You save by picking up</p>
+                                <p className="text-xl font-bold text-green-400">₹{costs.savings}</p>
+                            </div>
+                            <div className="ml-auto text-right">
+                                <p className="text-xs text-white/40">Time cost</p>
+                                <p className="text-sm text-white/60">{costs.pickupTime} min</p>
+                            </div>
+                        </div>
                     </motion.div>
                 )}
-            </AnimatePresence>
 
-            {/* Empty State */}
-            {!hasLocations && manualDistance === null && (
-                <div className="px-6 py-12 text-center">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-white/5 rounded-full flex items-center justify-center">
-                        <MapPin size={28} className="text-white/20" />
-                    </div>
-                    <p className="text-white/40 text-sm">
-                        Enter a restaurant to see if pickup is worth it
+                {/* Tip */}
+                <div className="p-4 bg-[#111113] border border-white/[0.06] rounded-xl">
+                    <p className="text-xs text-white/40 leading-relaxed">
+                        💡 <span className="text-white/60">Pro tip:</span> If the restaurant is &lt;2km away, pickup almost always saves ₹50+ per order.
                     </p>
                 </div>
-            )}
+            </div>
         </div>
     );
 }

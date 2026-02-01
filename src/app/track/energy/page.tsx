@@ -1,285 +1,262 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Zap, Thermometer, Lightbulb, Fan, Tv, Leaf, TrendingDown } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Zap, Star, Clock, IndianRupee, Lightbulb, Fan, Wind, Tv, Refrigerator } from 'lucide-react';
 import Link from 'next/link';
-import { APPLIANCE_POWER, GRID_EMISSION_FACTOR, calculateEnergyEmissions } from '@/lib/emissions';
-import { ELECTRICITY_RATES, calculateElectricityCost } from '@/lib/pricing';
 
-interface Appliance {
-    id: keyof typeof APPLIANCE_POWER;
-    name: string;
-    icon: React.ReactNode;
-    defaultHours: number;
-    color: string;
-    tips?: { action: string; savings: number }[];
-}
+// Electricity rate in India (average)
+const ELECTRICITY_RATE = 7; // ₹/kWh
 
-const APPLIANCES: Appliance[] = [
-    {
-        id: 'ac_1_5ton',
-        name: 'AC (1.5 ton)',
-        icon: <Thermometer size={20} />,
-        defaultHours: 6,
-        color: 'blue',
-        tips: [
-            { action: 'Set to 26°C instead of 22°C', savings: 24 },
-            { action: 'Use fan + AC at 28°C', savings: 40 },
-            { action: 'Clean filters monthly', savings: 10 },
-        ],
+// Appliance power data
+const APPLIANCES = {
+    ac: {
+        name: 'Air Conditioner',
+        emoji: '❄️',
+        variants: [
+            { id: 'ac_1star', name: '1 Star (1.5T)', watts: 2000, description: 'Old/basic models' },
+            { id: 'ac_3star', name: '3 Star (1.5T)', watts: 1500, description: 'Standard' },
+            { id: 'ac_5star', name: '5 Star (1.5T)', watts: 1100, description: 'Energy efficient' },
+            { id: 'ac_inverter', name: 'Inverter 5 Star', watts: 800, description: 'Most efficient' },
+        ]
     },
-    {
-        id: 'geyser_15l',
-        name: 'Geyser',
-        icon: <Zap size={20} />,
-        defaultHours: 0.5,
-        color: 'orange',
-        tips: [
-            { action: 'Shower 2 min less', savings: 30 },
-            { action: 'Turn off when not heating', savings: 40 },
-        ],
-    },
-    {
-        id: 'fan_ceiling',
+    fan: {
         name: 'Fan',
-        icon: <Fan size={20} />,
-        defaultHours: 8,
-        color: 'green',
-        tips: [],
+        emoji: '🌀',
+        variants: [
+            { id: 'fan_normal', name: 'Normal Ceiling Fan', watts: 75, description: 'Standard' },
+            { id: 'fan_bldc', name: 'BLDC Fan', watts: 28, description: '60% less power' },
+            { id: 'fan_table', name: 'Table Fan', watts: 50, description: 'Portable' },
+        ]
     },
-    {
-        id: 'tv_led_55',
-        name: 'TV (55")',
-        icon: <Tv size={20} />,
-        defaultHours: 4,
-        color: 'purple',
-        tips: [
-            { action: 'Reduce brightness 20%', savings: 20 },
-        ],
+    tv: {
+        name: 'Television',
+        emoji: '📺',
+        variants: [
+            { id: 'tv_led_32', name: '32" LED TV', watts: 50, description: 'Small' },
+            { id: 'tv_led_43', name: '43" LED TV', watts: 80, description: 'Medium' },
+            { id: 'tv_led_55', name: '55" LED TV', watts: 120, description: 'Large' },
+        ]
     },
-    {
-        id: 'refrigerator',
-        name: 'Fridge',
-        icon: <span className="text-lg">🧊</span>,
-        defaultHours: 24,
-        color: 'cyan',
-        tips: [
-            { action: 'Keep away from heat', savings: 15 },
-        ],
+    fridge: {
+        name: 'Refrigerator',
+        emoji: '🧊',
+        variants: [
+            { id: 'fridge_3star', name: '3 Star (250L)', watts: 150, description: 'Runs ~8hrs/day' },
+            { id: 'fridge_5star', name: '5 Star (250L)', watts: 100, description: 'Efficient' },
+            { id: 'fridge_inverter', name: 'Inverter (300L)', watts: 70, description: 'Most efficient' },
+        ]
     },
-];
-
-const colorMap: Record<string, { bg: string; border: string; text: string }> = {
-    blue: { bg: 'bg-blue-500/15', border: 'border-blue-500/30', text: 'text-blue-400' },
-    orange: { bg: 'bg-orange-500/15', border: 'border-orange-500/30', text: 'text-orange-400' },
-    green: { bg: 'bg-green-500/15', border: 'border-green-500/30', text: 'text-green-400' },
-    purple: { bg: 'bg-purple-500/15', border: 'border-purple-500/30', text: 'text-purple-400' },
-    cyan: { bg: 'bg-cyan-500/15', border: 'border-cyan-500/30', text: 'text-cyan-400' },
+    other: {
+        name: 'Other',
+        emoji: '🔌',
+        variants: [
+            { id: 'geyser', name: 'Water Heater/Geyser', watts: 2000, description: '15-30 min/day' },
+            { id: 'iron', name: 'Iron', watts: 1000, description: '30 min/day avg' },
+            { id: 'washing', name: 'Washing Machine', watts: 500, description: '1 hr/wash' },
+            { id: 'microwave', name: 'Microwave', watts: 1200, description: '15-30 min/day' },
+        ]
+    }
 };
 
-export default function EnergyPage() {
-    const [selectedAppliance, setSelectedAppliance] = useState<Appliance>(APPLIANCES[0]);
-    const [hours, setHours] = useState(selectedAppliance.defaultHours);
-    const [city, setCity] = useState<keyof typeof ELECTRICITY_RATES>('average');
+type ApplianceCategory = keyof typeof APPLIANCES;
 
-    const calculation = useMemo(() => {
-        const watts = APPLIANCE_POWER[selectedAppliance.id];
-        const kwhPerDay = (watts * hours) / 1000;
-        const cost = calculateElectricityCost(kwhPerDay, city);
-        const emissions = calculateEnergyEmissions(watts, hours);
+export default function EnergyPage() {
+    const [category, setCategory] = useState<ApplianceCategory>('ac');
+    const [selectedVariant, setSelectedVariant] = useState('ac_inverter');
+    const [hoursPerDay, setHoursPerDay] = useState(8);
+
+    const currentCategory = APPLIANCES[category];
+    const currentVariant = currentCategory.variants.find(v => v.id === selectedVariant) || currentCategory.variants[0];
+
+    // Calculate costs
+    const costs = useMemo(() => {
+        const watts = currentVariant.watts;
+        const kwhPerDay = (watts * hoursPerDay) / 1000;
+        const costPerDay = kwhPerDay * ELECTRICITY_RATE;
+        const costPerMonth = costPerDay * 30;
+        const costPerYear = costPerDay * 365;
+
+        // Find cheapest variant for comparison
+        const cheapestVariant = currentCategory.variants.reduce((min, v) =>
+            v.watts < min.watts ? v : min
+        );
+        const cheapestCostMonth = ((cheapestVariant.watts * hoursPerDay) / 1000) * ELECTRICITY_RATE * 30;
+        const potentialSavings = costPerMonth - cheapestCostMonth;
 
         return {
             watts,
-            kwhPerDay,
-            cost,
-            emissions,
+            kwhPerDay: kwhPerDay.toFixed(1),
+            costPerDay: Math.round(costPerDay),
+            costPerMonth: Math.round(costPerMonth),
+            costPerYear: Math.round(costPerYear),
+            potentialSavings: Math.round(potentialSavings),
+            cheapestVariant: cheapestVariant.name
         };
-    }, [selectedAppliance, hours, city]);
-
-    const potentialSavings = useMemo(() => {
-        if (!selectedAppliance.tips || selectedAppliance.tips.length === 0) return 0;
-        const maxSaving = Math.max(...selectedAppliance.tips.map(t => t.savings));
-        return Math.round(calculation.cost.monthly * (maxSaving / 100));
-    }, [selectedAppliance, calculation]);
-
-    const colors = colorMap[selectedAppliance.color];
+    }, [currentVariant, hoursPerDay, currentCategory]);
 
     return (
-        <div className="min-h-screen bg-[#0A0A0B] text-white">
+        <div className="min-h-screen bg-[#0A0A0B] text-white pb-24">
             {/* Header */}
-            <header className="px-6 pt-8 pb-2">
+            <header className="px-6 pt-8 pb-4">
                 <Link
                     href="/track"
-                    className="inline-flex items-center gap-2 text-[rgba(250,250,250,0.4)] hover:text-white mb-6 text-sm font-medium transition-colors"
+                    className="inline-flex items-center gap-2 text-white/40 hover:text-white mb-5 text-sm font-medium transition-colors"
                 >
                     <ArrowLeft size={16} />
                     Back
                 </Link>
                 <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl ${colors.bg} flex items-center justify-center`}>
-                        <Zap size={20} className={colors.text} />
+                    <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center">
+                        <Zap size={20} className="text-yellow-400" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Energy Cost</h1>
-                        <p className="text-[rgba(250,250,250,0.4)] text-sm">What your appliances really cost</p>
+                        <h1 className="text-2xl font-bold tracking-tight">Energy Calculator</h1>
+                        <p className="text-white/40 text-sm">What does it actually cost?</p>
                     </div>
                 </div>
             </header>
 
-            {/* Appliance Selector */}
-            <div className="px-6 py-5">
-                <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
-                    {APPLIANCES.map((appliance) => {
-                        const isSelected = selectedAppliance.id === appliance.id;
-                        const appColors = colorMap[appliance.color];
-                        return (
-                            <button
-                                key={appliance.id}
-                                onClick={() => {
-                                    setSelectedAppliance(appliance);
-                                    setHours(appliance.defaultHours);
-                                }}
-                                className={`
-                  flex-shrink-0 px-4 py-3 rounded-xl border transition-all duration-200
-                  ${isSelected
-                                        ? `${appColors.bg} ${appColors.border} ${appColors.text}`
-                                        : 'bg-[#111113] border-[rgba(255,255,255,0.06)] text-[rgba(250,250,250,0.5)] hover:border-[rgba(255,255,255,0.15)]'
-                                    }
-                `}
-                            >
-                                <div className="flex items-center gap-2">
-                                    {appliance.icon}
-                                    <span className="text-sm font-medium whitespace-nowrap">{appliance.name}</span>
+            {/* Category Tabs */}
+            <div className="px-6 pb-4">
+                <div className="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-hide">
+                    {(Object.keys(APPLIANCES) as ApplianceCategory[]).map((cat) => (
+                        <button
+                            key={cat}
+                            onClick={() => {
+                                setCategory(cat);
+                                setSelectedVariant(APPLIANCES[cat].variants[0].id);
+                            }}
+                            className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${category === cat
+                                    ? 'bg-yellow-500 text-black'
+                                    : 'bg-white/5 text-white/60 hover:bg-white/10'
+                                }`}
+                        >
+                            {APPLIANCES[cat].emoji} {APPLIANCES[cat].name}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Variant Selection */}
+            <div className="px-6 pb-4">
+                <p className="text-xs text-white/40 uppercase tracking-wider mb-3">Select Type</p>
+                <div className="space-y-2">
+                    {currentCategory.variants.map((variant) => (
+                        <button
+                            key={variant.id}
+                            onClick={() => setSelectedVariant(variant.id)}
+                            className={`w-full p-4 rounded-xl border text-left transition-all ${selectedVariant === variant.id
+                                    ? 'bg-yellow-500/10 border-yellow-500/40'
+                                    : 'bg-[#111113] border-white/[0.06] hover:border-white/20'
+                                }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-white font-medium">{variant.name}</p>
+                                    <p className="text-white/40 text-xs">{variant.description}</p>
                                 </div>
-                            </button>
-                        );
-                    })}
+                                <div className="text-right">
+                                    <p className="text-white/60 text-sm">{variant.watts}W</p>
+                                </div>
+                            </div>
+                        </button>
+                    ))}
                 </div>
             </div>
 
             {/* Hours Slider */}
-            <div className="px-6 pb-6">
-                <div className="bg-[#111113] border border-[rgba(255,255,255,0.06)] rounded-2xl p-5">
+            <div className="px-6 py-4">
+                <div className="bg-[#111113] border border-white/[0.08] rounded-2xl p-5">
                     <div className="flex items-center justify-between mb-4">
-                        <span className="text-[rgba(250,250,250,0.6)] text-sm">Hours per day</span>
-                        <select
-                            value={city}
-                            onChange={(e) => setCity(e.target.value as keyof typeof ELECTRICITY_RATES)}
-                            className="bg-[#18181B] border border-[rgba(255,255,255,0.1)] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[rgba(255,255,255,0.25)]"
-                        >
-                            <option value="average">Avg (₹6/kWh)</option>
-                            <option value="delhi">Delhi (₹5.5)</option>
-                            <option value="mumbai">Mumbai (₹6.5)</option>
-                            <option value="bangalore">Bangalore (₹6)</option>
-                        </select>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <input
-                            type="range"
-                            min={0.5}
-                            max={24}
-                            step={0.5}
-                            value={hours}
-                            onChange={(e) => setHours(Number(e.target.value))}
-                            className="flex-1"
-                        />
-                        <div className="text-2xl font-bold text-white min-w-[70px] text-right tabular-nums">
-                            {hours} <span className="text-sm font-normal text-[rgba(250,250,250,0.4)]">hrs</span>
+                        <div className="flex items-center gap-2">
+                            <Clock size={16} className="text-yellow-400" />
+                            <span className="text-white/60 text-sm font-medium">Hours per day</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <input
+                                type="number"
+                                min={1}
+                                max={24}
+                                value={hoursPerDay}
+                                onChange={(e) => setHoursPerDay(Math.max(1, Math.min(24, Number(e.target.value) || 1)))}
+                                className="w-10 bg-transparent text-right text-xl font-bold text-white outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            <span className="text-white/40 text-lg">hrs</span>
                         </div>
                     </div>
+                    <input
+                        type="range"
+                        min={1}
+                        max={24}
+                        value={hoursPerDay}
+                        onChange={(e) => setHoursPerDay(Number(e.target.value))}
+                        className="w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer
+                            [&::-webkit-slider-thumb]:appearance-none
+                            [&::-webkit-slider-thumb]:w-5
+                            [&::-webkit-slider-thumb]:h-5
+                            [&::-webkit-slider-thumb]:rounded-full
+                            [&::-webkit-slider-thumb]:bg-yellow-500
+                            [&::-webkit-slider-thumb]:cursor-pointer"
+                    />
                 </div>
             </div>
 
-            {/* Cost Display */}
-            <div className="px-6 pb-6">
+            {/* Cost Results */}
+            <div className="px-6 space-y-4">
                 <motion.div
-                    key={`${selectedAppliance.id}-${hours}`}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`relative overflow-hidden rounded-2xl p-6 ${colors.bg} border ${colors.border}`}
+                    className="bg-gradient-to-br from-yellow-500/10 to-orange-500/5 border border-yellow-500/20 rounded-2xl p-5"
                 >
-                    {/* Gradient glow */}
-                    <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/[0.02] to-transparent" />
-
-                    <div className="relative z-10">
-                        <div className="text-center mb-6">
-                            <div className="text-[rgba(250,250,250,0.5)] text-sm mb-2">This costs you</div>
-                            <div className="text-5xl font-bold text-white tabular-nums tracking-tight">
-                                ₹{calculation.cost.daily.toLocaleString()}
-                                <span className="text-xl font-normal text-[rgba(250,250,250,0.4)]">/day</span>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="text-center p-4 bg-[#0A0A0B]/50 rounded-xl">
-                                <div className="text-xl font-bold text-white tabular-nums">₹{calculation.cost.monthly.toLocaleString()}</div>
-                                <div className="text-xs text-[rgba(250,250,250,0.4)]">per month</div>
-                            </div>
-                            <div className="text-center p-4 bg-[#0A0A0B]/50 rounded-xl">
-                                <div className="text-xl font-bold text-white tabular-nums">₹{calculation.cost.yearly.toLocaleString()}</div>
-                                <div className="text-xs text-[rgba(250,250,250,0.4)]">per year</div>
-                            </div>
-                        </div>
-
-                        <div className="mt-4 flex items-center justify-center gap-2 text-[rgba(250,250,250,0.35)] text-sm">
-                            <Leaf size={14} />
-                            <span>{calculation.emissions.monthly.toFixed(1)} kg CO₂/month</span>
-                        </div>
-                    </div>
-                </motion.div>
-            </div>
-
-            {/* Tips */}
-            {selectedAppliance.tips && selectedAppliance.tips.length > 0 && (
-                <div className="px-6 pb-6">
-                    <h3 className="text-base font-semibold mb-3 flex items-center gap-2 text-white">
-                        <Lightbulb size={16} className="text-yellow-400" />
-                        Cut this bill
-                    </h3>
-                    <div className="space-y-2">
-                        {selectedAppliance.tips.map((tip, index) => (
-                            <motion.div
-                                key={index}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: index * 0.08 }}
-                                className="flex items-center justify-between p-4 bg-[#111113] border border-[rgba(255,255,255,0.06)] rounded-xl"
-                            >
-                                <span className="text-[rgba(250,250,250,0.6)] text-sm">{tip.action}</span>
-                                <span className="text-green-400 font-semibold text-sm bg-green-500/10 px-2.5 py-1 rounded-md">
-                                    -{tip.savings}%
-                                </span>
-                            </motion.div>
-                        ))}
-                    </div>
-
-                    {potentialSavings > 0 && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3 }}
-                            className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center gap-3"
-                        >
-                            <TrendingDown size={20} className="text-green-400" />
-                            <p className="text-sm text-green-400">
-                                <span className="font-bold">Save up to ₹{potentialSavings}</span>/month
-                            </p>
-                        </motion.div>
-                    )}
-                </div>
-            )}
-
-            {/* Footer */}
-            <div className="px-6 pb-safe">
-                <div className="p-4 bg-[#111113] border border-[rgba(255,255,255,0.06)] rounded-xl">
-                    <p className="text-xs text-[rgba(250,250,250,0.35)]">
-                        Based on {calculation.watts}W at ₹{ELECTRICITY_RATES[city]}/kWh. Actual costs vary by tariff slab.
+                    <p className="text-xs text-yellow-400/70 uppercase tracking-wider mb-1">Monthly Cost</p>
+                    <p className="text-4xl font-bold text-yellow-400">₹{costs.costPerMonth}</p>
+                    <p className="text-sm text-white/40 mt-1">
+                        {costs.kwhPerDay} kWh/day • ₹{costs.costPerDay}/day
                     </p>
-                </div>
-            </div>
+                </motion.div>
 
-            <div className="h-20" />
+                {/* Breakdown */}
+                <div className="bg-[#111113] border border-white/[0.06] rounded-xl p-4 space-y-3">
+                    <div className="flex justify-between text-sm">
+                        <span className="text-white/40">Power consumption</span>
+                        <span className="text-white">{costs.watts}W</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                        <span className="text-white/40">Daily usage</span>
+                        <span className="text-white">{costs.kwhPerDay} kWh</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                        <span className="text-white/40">Rate</span>
+                        <span className="text-white">₹{ELECTRICITY_RATE}/kWh</span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-2 border-t border-white/5">
+                        <span className="text-white/40">Yearly cost</span>
+                        <span className="text-white font-semibold">₹{costs.costPerYear.toLocaleString()}</span>
+                    </div>
+                </div>
+
+                {/* Savings Tip */}
+                {costs.potentialSavings > 50 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 bg-green-500/5 border border-green-500/20 rounded-xl"
+                    >
+                        <div className="flex items-start gap-3">
+                            <Lightbulb size={18} className="text-green-400 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <p className="text-sm text-green-400 font-medium">
+                                    Switch to {costs.cheapestVariant}
+                                </p>
+                                <p className="text-xs text-white/50 mt-1">
+                                    Save ₹{costs.potentialSavings}/month (₹{costs.potentialSavings * 12}/year)
+                                </p>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </div>
         </div>
     );
 }
