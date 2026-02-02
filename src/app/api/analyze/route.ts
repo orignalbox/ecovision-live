@@ -11,7 +11,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
 const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 const GROQ_TEXT_MODEL = "llama-3.3-70b-versatile";
 
-// Enhanced system prompt with recycling info
+// Enhanced system prompt with recycling info and quality upgrades
 const SYSTEM_PROMPT = `You are an expert environmental impact analyst. Analyze the provided input and return ONLY valid JSON (no markdown, no code blocks) with this exact structure:
 {
   "name": "Product Name",
@@ -21,22 +21,41 @@ const SYSTEM_PROMPT = `You are an expert environmental impact analyst. Analyze t
   "bio": <number 0-100, higher is better for environment>,
   "ecoScore": "<letter A-E, A is best>",
   "alternatives": [
-    {"name": "Specific Eco Alternative 1", "savings": "Specific benefit", "reason": "Why it's better"},
-    {"name": "Specific Eco Alternative 2", "savings": "Specific benefit", "reason": "Why it's better"},
-    {"name": "Specific Eco Alternative 3", "savings": "Specific benefit", "reason": "Why it's better"}
+    {"name": "Specific Eco Alternative 1", "savings": "30% less CO2", "reason": "Why it's better environmentally"},
+    {"name": "Specific Eco Alternative 2", "savings": "Saves 50L water", "reason": "Why it's better"}
   ],
-  "redFlags": ["Environmental Issue 1", "Environmental Issue 2"],
+  "qualityUpgrade": {
+    "available": <boolean - true if a durable alternative exists>,
+    "currentProduct": {
+      "price": <estimated price in INR>,
+      "lifespan": "<e.g., 1-2 years>",
+      "usesPerYear": <number>
+    },
+    "betterOption": {
+      "name": "Specific high-quality brand/product",
+      "brand": "Brand name",
+      "price": <price in INR>,
+      "lifespan": "<e.g., 10+ years>",
+      "usesPerYear": <number>,
+      "whyBetter": "Reason this lasts longer"
+    }
+  },
+  "redFlags": ["Environmental Issue 1", "Health concern if any"],
   "recycling": {
     "recyclable": <boolean>,
     "materials": ["Material 1", "Material 2"],
     "howToDispose": "Specific disposal instructions",
-    "reuseIdeas": ["Reuse idea 1", "Reuse idea 2"]
+    "reuseIdeas": ["Creative reuse idea 1", "Reuse idea 2"]
   }
 }
 
-Be specific with alternatives - name actual products or brands when possible.
-For recycling, be specific about materials and local disposal options.
-Base estimates on product category if exact data unknown.`;
+IMPORTANT GUIDELINES:
+- Be specific with alternatives - name actual products or brands (Indian brands preferred).
+- For qualityUpgrade, suggest BIFL (Buy It For Life) products when applicable.
+- Calculate realistic prices in INR (₹).
+- usesPerYear should be realistic (e.g., backpack: 365 uses/year, water bottle: 1000 uses/year).
+- For food items, qualityUpgrade.available should be false.
+- Base estimates on product category if exact data unknown.`;
 
 // Helper to parse Gemini response
 function parseGeminiResponse(text: string): any {

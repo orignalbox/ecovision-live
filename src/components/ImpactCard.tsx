@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import { X, Droplets, Wind, Leaf, Recycle, ExternalLink, Award, Share2, Check } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import clsx from 'clsx';
-import { matchProductToCategory } from '@/lib/bifl';
 
 export interface RecyclingInfo {
     recyclable: boolean;
@@ -19,6 +18,23 @@ export interface Alternative {
     reason?: string;
 }
 
+export interface QualityUpgrade {
+    available: boolean;
+    currentProduct?: {
+        price: number;
+        lifespan: string;
+        usesPerYear: number;
+    };
+    betterOption?: {
+        name: string;
+        brand?: string;
+        price: number;
+        lifespan: string;
+        usesPerYear: number;
+        whyBetter?: string;
+    };
+}
+
 export interface ImpactData {
     name: string;
     category?: string;
@@ -27,6 +43,7 @@ export interface ImpactData {
     bio: number;
     ecoScore?: string;
     alternatives?: Alternative[];
+    qualityUpgrade?: QualityUpgrade;
     redFlags?: string[];
     recycling?: RecyclingInfo;
 }
@@ -52,23 +69,56 @@ export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardP
 
     const ecoScoreColor = ecoScoreColors[data.ecoScore || ''] || 'text-gray-400 bg-gray-500/20 border-gray-500/40';
 
-    // Match scanned product to BIFL category for quality recommendations
-    const biflMatch = useMemo(() => {
-        return matchProductToCategory(data.name, data.category);
-    }, [data.name, data.category]);
+    // Helper to extract years from lifespan strings like "1-2 years", "10+ years", "6 months"
+    const parseLifespan = (lifespan: string): number => {
+        if (!lifespan) return 1;
+        const lower = lifespan.toLowerCase();
+        // Check for months
+        const monthMatch = lower.match(/(\d+)\s*month/);
+        if (monthMatch) return parseFloat(monthMatch[1]) / 12;
+        // Extract first number (handles "1-2 years", "10+ years", "5 years")
+        const yearMatch = lower.match(/(\d+)/);
+        return yearMatch ? parseFloat(yearMatch[1]) : 1;
+    };
 
-    // Calculate quality score cost
+    // Calculate cost-per-use from AI-generated qualityUpgrade data
     const costAnalysis = useMemo(() => {
-        if (!biflMatch) return null;
-        const genericPrice = 2000;
-        const biflPrice = 8000;
-        const genericUses = 100;
-        const biflUses = 1000;
+        const qu = data.qualityUpgrade;
+        if (!qu?.available || !qu.currentProduct || !qu.betterOption) return null;
+
+        const currentLifespanYears = parseLifespan(qu.currentProduct.lifespan);
+        const betterLifespanYears = parseLifespan(qu.betterOption.lifespan);
+
+        const currentUsesPerYear = qu.currentProduct.usesPerYear || 100;
+        const betterUsesPerYear = qu.betterOption.usesPerYear || 100;
+
+        const currentTotalUses = Math.max(currentLifespanYears * currentUsesPerYear, 1);
+        const betterTotalUses = Math.max(betterLifespanYears * betterUsesPerYear, 1);
+
+        const currentCostPerUse = qu.currentProduct.price / currentTotalUses;
+        const betterCostPerUse = qu.betterOption.price / betterTotalUses;
+
+        // Only show if quality option is actually cheaper per use
+        if (betterCostPerUse >= currentCostPerUse) return null;
+
         return {
-            generic: genericPrice / genericUses,
-            bifl: biflPrice / biflUses
+            current: {
+                costPerUse: currentCostPerUse,
+                lifespan: qu.currentProduct.lifespan,
+                totalUses: currentTotalUses
+            },
+            better: {
+                costPerUse: betterCostPerUse,
+                lifespan: qu.betterOption.lifespan,
+                totalUses: betterTotalUses,
+                name: qu.betterOption.name,
+                brand: qu.betterOption.brand,
+                price: qu.betterOption.price,
+                whyBetter: qu.betterOption.whyBetter
+            },
+            savings: Math.round((1 - betterCostPerUse / currentCostPerUse) * 100)
         };
-    }, [biflMatch]);
+    }, [data.qualityUpgrade]);
 
     const handleShare = async () => {
         setIsSharing(true);
@@ -335,8 +385,8 @@ export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardP
                             </div>
                         )}
 
-                        {/* BIFL Section (Secondary - Quality Upgrade) */}
-                        {biflMatch && (
+                        {/* Quality Upgrade Section (AI-Generated) */}
+                        {costAnalysis && (
                             <div className="space-y-4 pt-4 border-t border-white/10">
                                 <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl">
                                     <div className="flex items-center gap-2 mb-2">
@@ -344,42 +394,35 @@ export default function ImpactCard({ data, onClose, capturedImage }: ImpactCardP
                                         <h3 className="text-sm font-bold text-orange-400 uppercase tracking-wider">Quality Upgrade</h3>
                                     </div>
                                     <p className="text-sm text-white/70 mb-3">
-                                        Invest once in quality {biflMatch.category.name.toLowerCase()} — lasts 10x longer.
+                                        {costAnalysis.better.whyBetter || `Invest once — lasts ${costAnalysis.better.lifespan}.`}
                                     </p>
 
                                     {/* Cost Comparison */}
-                                    {costAnalysis && (
-                                        <div className="flex items-center gap-2 text-xs bg-black/20 p-2 rounded-lg">
-                                            <div className="flex-1 text-center">
-                                                <div className="text-white/40 mb-1">Cheap</div>
-                                                <div className="text-red-400 font-bold">₹{costAnalysis.generic.toFixed(0)}/use</div>
-                                            </div>
-                                            <div className="text-white/20">vs</div>
-                                            <div className="flex-1 text-center">
-                                                <div className="text-white/40 mb-1">Quality</div>
-                                                <div className="text-green-400 font-bold">₹{costAnalysis.bifl.toFixed(0)}/use</div>
-                                            </div>
+                                    <div className="flex items-center gap-2 text-xs bg-black/20 p-3 rounded-lg mb-3">
+                                        <div className="flex-1 text-center">
+                                            <div className="text-white/40 mb-1">Cheap Option</div>
+                                            <div className="text-red-400 font-bold text-lg">₹{costAnalysis.current.costPerUse.toFixed(1)}</div>
+                                            <div className="text-white/30">per use</div>
                                         </div>
-                                    )}
-                                </div>
+                                        <div className="text-white/20 text-lg">→</div>
+                                        <div className="flex-1 text-center">
+                                            <div className="text-white/40 mb-1">Quality</div>
+                                            <div className="text-green-400 font-bold text-lg">₹{costAnalysis.better.costPerUse.toFixed(1)}</div>
+                                            <div className="text-white/30">per use</div>
+                                        </div>
+                                    </div>
 
-                                <div className="space-y-2">
-                                    {biflMatch.products.slice(0, 2).map((prod, i) => (
-                                        <div key={i} className="p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl flex items-center justify-between">
-                                            <div>
-                                                <div className="font-semibold text-white text-sm">{prod.name}</div>
-                                                <div className="text-xs text-white/40">{prod.warranty || 'High durability'}</div>
-                                            </div>
-                                            <a
-                                                href={prod.links.official || prod.links.amazon || prod.links.flipkart || '#'}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="p-2 bg-white/10 rounded-lg text-white/60 hover:text-white hover:bg-white/20 transition-colors"
-                                            >
-                                                <ExternalLink size={14} />
-                                            </a>
+                                    {/* Recommended Product */}
+                                    <div className="p-3 bg-white/[0.05] rounded-xl">
+                                        <div className="font-semibold text-white">{costAnalysis.better.name}</div>
+                                        {costAnalysis.better.brand && (
+                                            <div className="text-xs text-white/40">by {costAnalysis.better.brand}</div>
+                                        )}
+                                        <div className="flex items-center justify-between mt-2">
+                                            <div className="text-sm text-green-400 font-medium">₹{costAnalysis.better.price.toLocaleString()}</div>
+                                            <div className="text-xs text-white/50">Lasts {costAnalysis.better.lifespan}</div>
                                         </div>
-                                    ))}
+                                    </div>
                                 </div>
                             </div>
                         )}
